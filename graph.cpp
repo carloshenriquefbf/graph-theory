@@ -7,7 +7,14 @@
 #include <string>
 #include <stdexcept>
 #include <iomanip>
+#include <queue>
+#include <stack>
 
+// ============================================================================
+// GRAPH REPRESENTATIONS
+// ============================================================================
+
+// Adjacency List Graph class
 class AdjacencyListGraph {
 private:
     int numVertices;
@@ -91,8 +98,18 @@ public:
             std::cout << std::endl;
         }
     }
+
+    // Method to get neighbors for algorithms
+    std::vector<int> getNeighbors(int vertex) const {
+        std::vector<int> neighbors;
+        for (int neighbor : adjacencyList[vertex]) {
+            neighbors.push_back(neighbor);
+        }
+        return neighbors;
+    }
 };
 
+// Adjacency Matrix Graph class
 class AdjacencyMatrixGraph {
 private:
     int numVertices;
@@ -186,7 +203,337 @@ public:
             std::cout << std::endl;
         }
     }
+
+    // Method to get neighbors for algorithms
+    std::vector<int> getNeighbors(int vertex) const {
+        std::vector<int> neighbors;
+        for (int j = 1; j <= numVertices; j++) {
+            if (adjacencyMatrix[vertex][j]) {
+                neighbors.push_back(j);
+            }
+        }
+        return neighbors;
+    }
 };
+
+// ============================================================================
+// GRAPH ALGORITHMS
+// ============================================================================
+
+// Abstract base class for graph algorithms
+template<typename GraphType>
+class GraphAlgorithm {
+protected:
+    const GraphType* graph;
+    std::vector<bool> visited;
+    std::vector<int> parent;
+    std::vector<int> level;
+    
+public:
+    GraphAlgorithm(const GraphType* g) : graph(g) {
+        if (graph) {
+            visited.resize(graph->getNumVertices() + 1, false);
+            parent.resize(graph->getNumVertices() + 1, -1);
+            level.resize(graph->getNumVertices() + 1, -1);
+        }
+    }
+    
+    virtual ~GraphAlgorithm() = default;
+    
+    virtual void execute(int startVertex) = 0;
+    virtual void printResults(const std::string& outputFilename) = 0;
+    
+protected:
+    void reset() {
+        std::fill(visited.begin(), visited.end(), false);
+        std::fill(parent.begin(), parent.end(), -1);
+        std::fill(level.begin(), level.end(), -1);
+    }
+};
+
+// Base class for BFS algorithm
+template<typename GraphType>
+class BFSAlgorithm : public GraphAlgorithm<GraphType> {
+protected:
+    std::queue<int> bfsQueue;
+    
+public:
+    BFSAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g) {}
+    
+    void execute(int startVertex) override {
+        this->reset();
+        
+        if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid start vertex");
+        }
+        
+        this->visited[startVertex] = true;
+        this->level[startVertex] = 0;
+        this->parent[startVertex] = -1; // Root has no parent
+        bfsQueue.push(startVertex);
+        
+        while (!bfsQueue.empty()) {
+            int current = bfsQueue.front();
+            bfsQueue.pop();
+            
+            // Get neighbors based on graph type
+            std::vector<int> neighbors = getNeighbors(current);
+            
+            for (int neighbor : neighbors) {
+                if (!this->visited[neighbor]) {
+                    this->visited[neighbor] = true;
+                    this->parent[neighbor] = current;
+                    this->level[neighbor] = this->level[current] + 1;
+                    bfsQueue.push(neighbor);
+                }
+            }
+        }
+    }
+    
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+        
+        outFile << "\nBFS TREE" << std::endl;
+        outFile << "========" << std::endl;
+        outFile << "Vertex | Parent | Level" << std::endl;
+        outFile << "-------|--------|------" << std::endl;
+        
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            if (this->visited[i]) {
+                outFile << std::setw(6) << i << " | ";
+                if (this->parent[i] == -1) {
+                    outFile << std::setw(6) << "root" << " | ";
+                } else {
+                    outFile << std::setw(6) << this->parent[i] << " | ";
+                }
+                outFile << std::setw(5) << this->level[i] << std::endl;
+            }
+        }
+        outFile << std::endl;
+    }
+    
+protected:
+    std::vector<int> getNeighbors(int vertex) {
+        return this->graph->getNeighbors(vertex);
+    }
+};
+
+// Base class for DFS algorithm
+template<typename GraphType>
+class DFSAlgorithm : public GraphAlgorithm<GraphType> {
+protected:
+    std::stack<int> dfsStack;
+    
+public:
+    DFSAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g) {}
+    
+    void execute(int startVertex) override {
+        this->reset();
+        
+        if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid start vertex");
+        }
+        
+        dfsRecursive(startVertex, -1, 0);
+    }
+    
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+        
+        outFile << "\nDFS TREE" << std::endl;
+        outFile << "========" << std::endl;
+        outFile << "Vertex | Parent | Level" << std::endl;
+        outFile << "-------|--------|------" << std::endl;
+        
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            if (this->visited[i]) {
+                outFile << std::setw(6) << i << " | ";
+                if (this->parent[i] == -1) {
+                    outFile << std::setw(6) << "root" << " | ";
+                } else {
+                    outFile << std::setw(6) << this->parent[i] << " | ";
+                }
+                outFile << std::setw(5) << this->level[i] << std::endl;
+            }
+        }
+        outFile << std::endl;
+    }
+    
+protected:
+    std::vector<int> getNeighbors(int vertex) {
+        return this->graph->getNeighbors(vertex);
+    }
+    
+private:
+    void dfsRecursive(int vertex, int parent, int level) {
+        this->visited[vertex] = true;
+        this->parent[vertex] = parent;
+        this->level[vertex] = level;
+        
+        std::vector<int> neighbors = getNeighbors(vertex);
+        for (int neighbor : neighbors) {
+            if (!this->visited[neighbor]) {
+                dfsRecursive(neighbor, vertex, level + 1);
+            }
+        }
+    }
+};
+
+// Distance algorithm that extends BFS (reuses BFS implementation)
+template<typename GraphType>
+class DistanceAlgorithm : public BFSAlgorithm<GraphType> {
+public:
+    DistanceAlgorithm(const GraphType* g) : BFSAlgorithm<GraphType>(g) {}
+    
+    int getDistance(int from, int to) {
+        // REUTILIZAÇÃO: Usa a implementação de BFS para encontrar distância
+        this->execute(from);
+        
+        if (!this->visited[to]) {
+            return -1; // No path exists
+        }
+        
+        return this->level[to];
+    }
+    
+    void printResults(const std::string& outputFilename) override {
+        // BFS tree is already printed by parent class
+        // This method can be overridden to add distance-specific output
+        BFSAlgorithm<GraphType>::printResults(outputFilename);
+    }
+};
+
+// Diameter algorithm that extends DistanceAlgorithm (reuses distance calculation)
+template<typename GraphType>
+class DiameterAlgorithm : public DistanceAlgorithm<GraphType> {
+public:
+    DiameterAlgorithm(const GraphType* g) : DistanceAlgorithm<GraphType>(g) {}
+    
+    int getDiameter() {
+        int diameter = 0;
+        
+        // Check distance between all pairs of vertices
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            for (int j = i + 1; j <= this->graph->getNumVertices(); j++) {
+                // REUTILIZAÇÃO: Usa a implementação de DistanceAlgorithm
+                int distance = this->getDistance(i, j);
+                if (distance > diameter) {
+                    diameter = distance;
+                }
+            }
+        }
+        
+        return diameter;
+    }
+    
+    void printResults(const std::string& outputFilename) override {
+        DistanceAlgorithm<GraphType>::printResults(outputFilename);
+        
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+        
+        outFile << "GRAPH DIAMETER" << std::endl;
+        outFile << "==============" << std::endl;
+        outFile << "Diameter: " << getDiameter() << std::endl;
+        outFile << std::endl;
+    }
+};
+
+// Connected components algorithm that extends DFS (reuses DFS implementation)
+template<typename GraphType>
+class ConnectedComponentsAlgorithm : public DFSAlgorithm<GraphType> {
+private:
+    std::vector<std::vector<int>> components;
+    
+public:
+    ConnectedComponentsAlgorithm(const GraphType* g) : DFSAlgorithm<GraphType>(g) {}
+    
+    void execute(int startVertex = -1) override {
+        components.clear();
+        this->reset();
+        
+        // If no start vertex specified, find all components
+        if (startVertex == -1) {
+            for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+                if (!this->visited[i]) {
+                    std::vector<int> component;
+                    findComponent(i, component);
+                    if (!component.empty()) {
+                        components.push_back(component);
+                    }
+                }
+            }
+        } else {
+            // REUTILIZAÇÃO: Usa a implementação de DFS para componente específico
+            DFSAlgorithm<GraphType>::execute(startVertex);
+            
+            // Extract component from visited vertices
+            std::vector<int> component;
+            for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+                if (this->visited[i]) {
+                    component.push_back(i);
+                }
+            }
+            if (!component.empty()) {
+                components.push_back(component);
+            }
+        }
+        
+        // Sort components by size (descending order)
+        std::sort(components.begin(), components.end(), 
+                  [](const std::vector<int>& a, const std::vector<int>& b) {
+                      return a.size() > b.size();
+                  });
+    }
+    
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+        
+        outFile << "CONNECTED COMPONENTS" << std::endl;
+        outFile << "====================" << std::endl;
+        outFile << "Number of components: " << components.size() << std::endl;
+        outFile << std::endl;
+        
+        for (size_t i = 0; i < components.size(); i++) {
+            outFile << "Component " << (i + 1) << " (size: " << components[i].size() << "): ";
+            for (size_t j = 0; j < components[i].size(); j++) {
+                outFile << components[i][j];
+                if (j < components[i].size() - 1) outFile << " ";
+            }
+            outFile << std::endl;
+        }
+        outFile << std::endl;
+    }
+    
+private:
+    void findComponent(int startVertex, std::vector<int>& component) {
+        // REUTILIZAÇÃO: Usa a implementação de DFS para encontrar componente
+        this->visited[startVertex] = true;
+        component.push_back(startVertex);
+        
+        std::vector<int> neighbors = this->getNeighbors(startVertex);
+        for (int neighbor : neighbors) {
+            if (!this->visited[neighbor]) {
+                findComponent(neighbor, component);
+            }
+        }
+    }
+};
+
+// ============================================================================
+// FILE READER AND UTILITIES
+// ============================================================================
 
 class GraphFileReader {
 public:
@@ -220,7 +567,7 @@ public:
 };
 
 template <typename GraphType>
-void generateGraphStatistics(const GraphType& graph, const std::string& outputFilename) {
+void generateGraphStatistics(const GraphType& graph, const std::string& outputFilename, int startVertex = 1) {
     std::ofstream outFile(outputFilename);
 
     if (!outFile.is_open()) {
@@ -240,7 +587,33 @@ void generateGraphStatistics(const GraphType& graph, const std::string& outputFi
 
     outFile.close();
 
-    std::cout << "Statistics saved to: " << outputFilename << std::endl;
+    // Execute all algorithms
+    try {
+        // BFS Algorithm
+        BFSAlgorithm<GraphType> bfs(&graph);
+        bfs.execute(startVertex);
+        bfs.printResults(outputFilename);
+
+        // DFS Algorithm
+        DFSAlgorithm<GraphType> dfs(&graph);
+        dfs.execute(startVertex);
+        dfs.printResults(outputFilename);
+
+        // Distance and Diameter Algorithms
+        DiameterAlgorithm<GraphType> diameter(&graph);
+        diameter.execute(startVertex);
+        diameter.printResults(outputFilename);
+
+        // Connected Components Algorithm
+        ConnectedComponentsAlgorithm<GraphType> components(&graph);
+        components.execute(); // Find all components
+        components.printResults(outputFilename);
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error executing algorithms: " << e.what() << std::endl;
+    }
+
+    std::cout << "Statistics and algorithms saved to: " << outputFilename << std::endl;
 }
 
 std::string generateOutputFilename(const std::string& inputFilename, const std::string& mode) {
@@ -251,12 +624,23 @@ std::string generateOutputFilename(const std::string& inputFilename, const std::
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <filename> <mode (adjacencyMatrix | adjacencyList)>\n";
+        std::cerr << "Usage: " << argv[0] << " <filename> <mode (adjacencyMatrix | adjacencyList)> [startVertex]\n";
+        std::cerr << "startVertex is optional and defaults to 1\n";
         return 1;
     }
 
     std::string filename = argv[1];
     std::string mode = argv[2];
+    int startVertex = 1; // Default start vertex
+    
+    if (argc >= 4) {
+        try {
+            startVertex = std::stoi(argv[3]);
+        } catch (const std::exception& e) {
+            std::cerr << "Invalid start vertex: " << argv[3] << std::endl;
+            return 1;
+        }
+    }
 
     if (mode != "adjacencyMatrix" && mode != "adjacencyList") {
         std::cerr << "Invalid mode. Use 'adjacencyMatrix' or 'adjacencyList'.\n";
@@ -266,11 +650,11 @@ int main(int argc, char* argv[]) {
         if (mode == "adjacencyMatrix") {
             AdjacencyMatrixGraph graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename);
             std::string outputFilename = generateOutputFilename(filename, mode);
-            generateGraphStatistics(graph, outputFilename);
+            generateGraphStatistics(graph, outputFilename, startVertex);
         } else {
             AdjacencyListGraph graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename);
             std::string outputFilename = generateOutputFilename(filename, mode);
-            generateGraphStatistics(graph, outputFilename);
+            generateGraphStatistics(graph, outputFilename, startVertex);
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

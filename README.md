@@ -1,25 +1,72 @@
 # Graph theory - COS242
 
-Usage:
+Complete graph library implementation with algorithms for BFS, DFS, distance calculation, diameter computation, and connected components analysis.
+
+## Features
+
+✅ **Graph Input/Output**
+- Read graphs from text files
+- Generate comprehensive statistics files
+
+✅ **Graph Representations** 
+- Adjacency Matrix implementation
+- Adjacency List implementation
+- User-selectable representation mode
+
+✅ **Graph Algorithms**
+- **BFS (Breadth-First Search)** with tree generation
+- **DFS (Depth-First Search)** with tree generation  
+- **Distance calculation** between vertices
+- **Graph diameter** computation
+- **Connected components** discovery
+
+✅ **Object-Oriented Design**
+- Inheritance hierarchy with algorithm reuse
+- Template-based design for flexibility
+- Clear separation of concerns
+
+## Usage
+
+### Compilation
 
 To compile the program, use the following command:
-```
-g++ -o graph graph.cpp
-```
-
-The command line arguments are:
-
-```
-<input_filename> <input_mode>
+```bash
+make
 ```
 
-Where `input_mode` can be either `adjacencyMatrix` or `adjacencyList`, e.g.:
+Or manually:
+```bash
+g++ -std=c++17 -Wall -Wextra -O2 -o graph graph.cpp
+```
+
+**Note:** The entire graph library is now contained in a single `graph.cpp` file, making it easy to use as an API for testing with larger graphs.
+
+### Command Line Arguments
 
 ```bash
-./graph $(echo "example.txt adjacencyMatrix")
+./graph <input_filename> <input_mode> [startVertex]
 ```
 
-Where `example.txt` is a text file containing the graph data. It should be in the following format:
+Where:
+- `input_mode` can be either `adjacencyMatrix` or `adjacencyList`
+- `startVertex` is optional and defaults to 1 (used for BFS/DFS algorithms)
+
+### Examples
+
+```bash
+# Using adjacency matrix representation
+./graph example.txt adjacencyMatrix 1
+
+# Using adjacency list representation  
+./graph example.txt adjacencyList 1
+
+# Using different start vertex
+./graph example.txt adjacencyMatrix 3
+```
+
+### Input Format
+
+The input file should contain graph data in the following format:
 
 ```
 5
@@ -30,9 +77,12 @@ Where `example.txt` is a text file containing the graph data. It should be in th
 1 5
 ```
 
-The first line indicates the number of vertices in the graph. Each subsequent line represents an edge between two vertices.
+- First line: number of vertices
+- Subsequent lines: edges (vertex pairs)
 
-The program will output the graph statistics in a file named `<input_filename>_<input_mode>_info.txt` in the following format:
+### Output
+
+The program generates a comprehensive analysis file named `<input_filename>_<input_mode>_info.txt` containing:
 
 ```
 GRAPH STATISTICS
@@ -43,5 +93,74 @@ Minimum degree: 1
 Maximum degree: 4
 Average degree: 2.00
 Median degree: 2.00
+
+BFS TREE
+========
+Vertex | Parent | Level
+-------|--------|------
+     1 |   root |     0
+     2 |      1 |     1
+     3 |      5 |     2
+     4 |      5 |     2
+     5 |      1 |     1
+
+DFS TREE
+========
+Vertex | Parent | Level
+-------|--------|------
+     1 |   root |     0
+     2 |      1 |     1
+     3 |      5 |     3
+     4 |      5 |     3
+     5 |      2 |     2
+
+GRAPH DIAMETER
+==============
+Diameter: 2
+
+CONNECTED COMPONENTS
+====================
+Number of components: 1
+
+Component 1 (size: 5): 1 2 5 3 4
 ```
+
+## Algorithm Implementation Details
+
+### Object-Oriented Design
+
+The implementation follows OOP principles with clear inheritance hierarchy:
+
+- **`GraphAlgorithm<GraphType>`**: Abstract base class
+- **`BFSAlgorithm<GraphType>`**: BFS implementation
+- **`DFSAlgorithm<GraphType>`**: DFS implementation  
+- **`DistanceAlgorithm<GraphType>`**: Extends BFS for distance calculation
+- **`DiameterAlgorithm<GraphType>`**: Extends DistanceAlgorithm for diameter computation
+- **`ConnectedComponentsAlgorithm<GraphType>`**: Extends DFS for component discovery
+
+### Code Reuse 
+
+The design emphasizes code reuse through inheritance:
+- **DistanceAlgorithm** reuses BFS implementation (marked with `// REUTILIZAÇÃO` comments)
+- **DiameterAlgorithm** reuses DistanceAlgorithm methods
+- **ConnectedComponentsAlgorithm** reuses DFS implementation
+
+### Template Design
+
+All algorithms are template-based, allowing them to work with both:
+- `AdjacencyListGraph`
+- `AdjacencyMatrixGraph`
+
+This provides flexibility while maintaining type safety and performance optimization.
+
+## File Structure
+
+The project now consists of a single unified file:
+- **`graph.cpp`** - Complete graph library containing all classes and algorithms
+
+This unified approach makes the library easy to:
+- Use as an API for testing with larger graphs
+- Integrate into other projects
+- Maintain and modify
+- Compile without dependencies
 
