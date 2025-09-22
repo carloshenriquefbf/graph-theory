@@ -2,28 +2,7 @@
 
 Complete graph library implementation with algorithms for BFS, DFS, distance calculation, diameter computation, and connected components analysis.
 
-## Features
 
-✅ **Graph Input/Output**
-- Read graphs from text files
-- Generate comprehensive statistics files
-
-✅ **Graph Representations** 
-- Adjacency Matrix implementation
-- Adjacency List implementation
-- User-selectable representation mode
-
-✅ **Graph Algorithms**
-- **BFS (Breadth-First Search)** with tree generation
-- **DFS (Depth-First Search)** with tree generation  
-- **Distance calculation** between vertices
-- **Graph diameter** computation
-- **Connected components** discovery
-
-✅ **Object-Oriented Design**
-- Inheritance hierarchy with algorithm reuse
-- Template-based design for flexibility
-- Clear separation of concerns
 
 ## Usage
 
@@ -39,7 +18,7 @@ Or manually:
 g++ -std=c++17 -Wall -Wextra -O2 -o graph graph.cpp
 ```
 
-**Note:** The entire graph library is now contained in a single `graph.cpp` file, making it easy to use as an API for testing with larger graphs.
+**Note:** The entire graph library is now contained in a single `graph.cpp` file.
 
 ### Command Line Arguments
 
@@ -127,20 +106,20 @@ Component 1 (size: 5): 1 2 5 3 4
 
 ## Algorithm Implementation Details
 
-### Object-Oriented Design
+### Implementation Structure
 
-The implementation follows OOP principles with clear inheritance hierarchy:
+The implementation uses a modular design with clear algorithm hierarchy:
 
-- **`GraphAlgorithm<GraphType>`**: Abstract base class
+- **`GraphAlgorithm<GraphType>`**: Base algorithm interface
 - **`BFSAlgorithm<GraphType>`**: BFS implementation
 - **`DFSAlgorithm<GraphType>`**: DFS implementation  
-- **`DistanceAlgorithm<GraphType>`**: Extends BFS for distance calculation
-- **`DiameterAlgorithm<GraphType>`**: Extends DistanceAlgorithm for diameter computation
-- **`ConnectedComponentsAlgorithm<GraphType>`**: Extends DFS for component discovery
+- **`DistanceAlgorithm<GraphType>`**: Distance calculation using BFS
+- **`DiameterAlgorithm<GraphType>`**: Diameter computation using distance methods
+- **`ConnectedComponentsAlgorithm<GraphType>`**: Component discovery using DFS
 
 ### Code Reuse 
 
-The design emphasizes code reuse through inheritance:
+The design emphasizes code reuse through modular implementation:
 - **DistanceAlgorithm** reuses BFS implementation (marked with `// REUTILIZAÇÃO` comments)
 - **DiameterAlgorithm** reuses DistanceAlgorithm methods
 - **ConnectedComponentsAlgorithm** reuses DFS implementation
@@ -151,7 +130,7 @@ All algorithms are template-based, allowing them to work with both:
 - `AdjacencyListGraph`
 - `AdjacencyMatrixGraph`
 
-This provides flexibility while maintaining type safety and performance optimization.
+This provides flexibility while maintaining type safety and performance optimization for different graph representations.
 
 ## File Structure
 
