@@ -2,8 +2,6 @@
 
 Complete graph library implementation with algorithms for BFS, DFS, distance calculation, diameter computation, and connected components analysis.
 
-
-
 ## Usage
 
 ### Compilation
@@ -23,24 +21,73 @@ g++ -std=c++17 -Wall -Wextra -O2 -o graph graph.cpp
 ### Command Line Arguments
 
 ```bash
-./graph <input_filename> <input_mode> [startVertex]
+./graph <filename> <mode> <operation> [options]
 ```
 
-Where:
-- `input_mode` can be either `adjacencyMatrix` or `adjacencyList`
-- `startVertex` is optional and defaults to 1 (used for BFS/DFS algorithms)
+**Parameters:**
+- `filename`: Path to the input graph file
+- `mode`: Graph representation (`adjacencyMatrix` or `adjacencyList`)
+- `operation`: Algorithm/analysis to perform
+- `[options]`: Additional parameters depending on the operation
+
+### Available Operations
+
+#### 1. Graph Statistics Only
+```bash
+./graph <filename> <mode> stats
+```
+Generates basic graph statistics (vertices, edges, degree information).
+
+#### 2. BFS Algorithm
+```bash
+./graph <filename> <mode> bfs <startVertex>
+```
+Runs Breadth-First Search from the specified start vertex.
+
+#### 3. DFS Algorithm
+```bash
+./graph <filename> <mode> dfs <startVertex>
+```
+Runs Depth-First Search from the specified start vertex.
+
+#### 4. Graph Diameter
+```bash
+./graph <filename> <mode> diameter
+```
+Calculates the diameter of the graph (longest shortest path).
+
+#### 5. Connected Components
+```bash
+./graph <filename> <mode> components
+```
+Finds all connected components in the graph.
+
+#### 6. Full Analysis
+```bash
+./graph <filename> <mode> all <startVertex>
+```
+Runs all algorithms and generates comprehensive analysis.
 
 ### Examples
 
 ```bash
-# Using adjacency matrix representation
-./graph example.txt adjacencyMatrix 1
+# Generate only graph statistics using adjacency list
+./graph example.txt adjacencyList stats
 
-# Using adjacency list representation  
-./graph example.txt adjacencyList 1
+# Run BFS from vertex 1 using adjacency matrix
+./graph example.txt adjacencyMatrix bfs 1
 
-# Using different start vertex
-./graph example.txt adjacencyMatrix 3
+# Run DFS from vertex 3 using adjacency list
+./graph example.txt adjacencyList dfs 3
+
+# Calculate graph diameter using adjacency matrix
+./graph example.txt adjacencyMatrix diameter
+
+# Find connected components using adjacency list
+./graph example.txt adjacencyList components
+
+# Run full analysis starting from vertex 1
+./graph example.txt adjacencyMatrix all 1
 ```
 
 ### Input Format
@@ -59,10 +106,45 @@ The input file should contain graph data in the following format:
 - First line: number of vertices
 - Subsequent lines: edges (vertex pairs)
 
-### Output
+### Output Files
 
-The program generates a comprehensive analysis file named `<input_filename>_<input_mode>_info.txt` containing:
+The program generates specific output files based on the operation:
 
+- **stats**: `<filename>_<mode>_stats.txt`
+- **bfs**: `<filename>_<mode>_bfs.txt`
+- **dfs**: `<filename>_<mode>_dfs.txt`
+- **diameter**: `<filename>_<mode>_diameter.txt`
+- **components**: `<filename>_<mode>_components.txt`
+- **all**: `<filename>_<mode>_info.txt`
+
+### Sample Output
+
+#### Statistics Output (`example_adjacencyList_stats.txt`)
+```
+GRAPH STATISTICS
+================
+Number of vertices: 5
+Number of edges: 5
+Minimum degree: 1
+Maximum degree: 4
+Average degree: 2.00
+Median degree: 2.00
+```
+
+#### BFS Output (`example_adjacencyMatrix_bfs.txt`)
+```
+BFS TREE
+========
+Vertex | Parent | Level
+-------|--------|------
+     1 |   root |     0
+     2 |      1 |     1
+     3 |      5 |     2
+     4 |      5 |     2
+     5 |      1 |     1
+```
+
+#### Full Analysis Output (`example_adjacencyMatrix_info.txt`)
 ```
 GRAPH STATISTICS
 ================
@@ -112,12 +194,12 @@ The implementation uses a modular design with clear algorithm hierarchy:
 
 - **`GraphAlgorithm<GraphType>`**: Base algorithm interface
 - **`BFSAlgorithm<GraphType>`**: BFS implementation
-- **`DFSAlgorithm<GraphType>`**: DFS implementation  
+- **`DFSAlgorithm<GraphType>`**: DFS implementation
 - **`DistanceAlgorithm<GraphType>`**: Distance calculation using BFS
 - **`DiameterAlgorithm<GraphType>`**: Diameter computation using distance methods
 - **`ConnectedComponentsAlgorithm<GraphType>`**: Component discovery using DFS
 
-### Code Reuse 
+### Code Reuse
 
 The design emphasizes code reuse through modular implementation:
 - **DistanceAlgorithm** reuses BFS implementation (marked with `// REUTILIZAÇÃO` comments)
@@ -134,12 +216,11 @@ This provides flexibility while maintaining type safety and performance optimiza
 
 ## File Structure
 
-The project now consists of a single unified file:
+The project consists of a single unified file:
 - **`graph.cpp`** - Complete graph library containing all classes and algorithms
 
 This unified approach makes the library easy to:
-- Use as an API for testing with larger graphs
-- Integrate into other projects
-- Maintain and modify
-- Compile without dependencies
-
+- Use with specific operations for targeted analysis
+- Integrate into automated testing pipelines
+- Scale for large graph analysis workflows
+- Maintain and extend with new algorithms
