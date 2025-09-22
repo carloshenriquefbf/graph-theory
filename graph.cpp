@@ -107,6 +107,11 @@ public:
         }
         return neighbors;
     }
+    
+    // Otimização: versão que evita cópia desnecessária para AdjacencyList
+    const std::set<int>& getNeighborsSet(int vertex) const {
+        return adjacencyList[vertex];
+    }
 };
 
 // Adjacency Matrix Graph class
@@ -198,7 +203,7 @@ public:
         for (int i = 1; i <= numVertices; i++) {
             std::cout << "Vertex " << i << ": ";
             for (int j = 1; j <= numVertices; j++) {
-                std::cout << adjacencyMatrix[i][j] << " ";
+                std::cout << (adjacencyMatrix[i][j] ? 1 : 0) << " ";
             }
             std::cout << std::endl;
         }
@@ -265,6 +270,11 @@ public:
         
         if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
             throw std::invalid_argument("Invalid start vertex");
+        }
+        
+        // Limpa a queue para garantir estado limpo
+        while (!bfsQueue.empty()) {
+            bfsQueue.pop();
         }
         
         this->visited[startVertex] = true;
@@ -337,6 +347,11 @@ public:
             throw std::invalid_argument("Invalid start vertex");
         }
         
+        // Limpa o stack para garantir estado limpo
+        while (!dfsStack.empty()) {
+            dfsStack.pop();
+        }
+        
         dfsRecursive(startVertex, -1, 0);
     }
     
@@ -402,6 +417,20 @@ public:
         return this->level[to];
     }
     
+    // Otimização: BFS que calcula distâncias de um vértice para todos os outros
+    std::vector<int> getAllDistancesFrom(int source) {
+        this->execute(source);
+        std::vector<int> distances(this->graph->getNumVertices() + 1, -1);
+        
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            if (this->visited[i]) {
+                distances[i] = this->level[i];
+            }
+        }
+        
+        return distances;
+    }
+    
     void printResults(const std::string& outputFilename) override {
         // BFS tree is already printed by parent class
         // This method can be overridden to add distance-specific output
@@ -417,14 +446,20 @@ public:
     
     int getDiameter() {
         int diameter = 0;
+        int numVertices = this->graph->getNumVertices();
         
-        // Check distance between all pairs of vertices
-        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
-            for (int j = i + 1; j <= this->graph->getNumVertices(); j++) {
-                // REUTILIZAÇÃO: Usa a implementação de DistanceAlgorithm
-                int distance = this->getDistance(i, j);
-                if (distance > diameter) {
-                    diameter = distance;
+        // Otimização avançada: Para grafos muito grandes, pode pular alguns vértices
+        // mas para manter a correção, faremos apenas a otimização básica
+        
+        // Otimização: Apenas O(n) BFS calls em vez de O(n²)
+        // Para cada vértice, calcula distâncias para todos os outros de uma vez
+        for (int i = 1; i <= numVertices; i++) {
+            std::vector<int> distances = this->getAllDistancesFrom(i);
+            
+            // Encontra a maior distância a partir deste vértice
+            for (int j = 1; j <= numVertices; j++) {
+                if (distances[j] > diameter) {
+                    diameter = distances[j];
                 }
             }
         }
@@ -518,14 +553,22 @@ public:
     
 private:
     void findComponent(int startVertex, std::vector<int>& component) {
-        // REUTILIZAÇÃO: Usa a implementação de DFS para encontrar componente
+        // Otimização: DFS iterativo em vez de recursivo para evitar stack overflow
+        std::stack<int> stack;
+        stack.push(startVertex);
         this->visited[startVertex] = true;
-        component.push_back(startVertex);
         
-        std::vector<int> neighbors = this->getNeighbors(startVertex);
-        for (int neighbor : neighbors) {
-            if (!this->visited[neighbor]) {
-                findComponent(neighbor, component);
+        while (!stack.empty()) {
+            int current = stack.top();
+            stack.pop();
+            component.push_back(current);
+            
+            std::vector<int> neighbors = this->getNeighbors(current);
+            for (int neighbor : neighbors) {
+                if (!this->visited[neighbor]) {
+                    this->visited[neighbor] = true;
+                    stack.push(neighbor);
+                }
             }
         }
     }
