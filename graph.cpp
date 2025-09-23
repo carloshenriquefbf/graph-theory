@@ -14,6 +14,7 @@
 #include <mach/mach.h>
 #include <chrono>
 #include <variant>
+#include <random>
 
 // ============================================================================
 // GRAPH REPRESENTATIONS
@@ -357,7 +358,7 @@ public:
             dfsStack.pop();
         }
 
-        dfsRecursive(startVertex, -1, 0);
+        dfsIterative(startVertex);
     }
 
     void printResults(const std::string& outputFilename) override {
@@ -391,6 +392,7 @@ protected:
     }
 
 private:
+    [[deprecated("Use dfsIterative() instead. Recursive version causes stack overflow on large graphs.")]]
     void dfsRecursive(int vertex, int parent, int level) {
         this->visited[vertex] = true;
         this->parent[vertex] = parent;
@@ -400,6 +402,39 @@ private:
         for (int neighbor : neighbors) {
             if (!this->visited[neighbor]) {
                 dfsRecursive(neighbor, vertex, level + 1);
+            }
+        }
+    }
+
+    void dfsIterative(int startVertex) {
+        // Implementação iterativa para evitar stack overflow em grafos grandes
+        std::stack<std::pair<int, std::pair<int, int>>> stack; // {vertex, {parent, level}}
+        stack.push({startVertex, {-1, 0}});
+
+        while (!stack.empty()) {
+            auto current = stack.top();
+            stack.pop();
+
+            int vertex = current.first;
+            int parent = current.second.first;
+            int level = current.second.second;
+
+            // Verificação de bounds para evitar segmentation fault
+            if (vertex < 1 || static_cast<size_t>(vertex) >= this->visited.size()) {
+                continue;
+            }
+
+            if (this->visited[vertex]) continue;
+
+            this->visited[vertex] = true;
+            this->parent[vertex] = parent;
+            this->level[vertex] = level;
+
+            std::vector<int> neighbors = getNeighbors(vertex);
+            for (int neighbor : neighbors) {
+                if (neighbor >= 1 && static_cast<size_t>(neighbor) < this->visited.size() && !this->visited[neighbor]) {
+                    stack.push({neighbor, {vertex, level + 1}});
+                }
             }
         }
     }
@@ -446,15 +481,16 @@ public:
 // Diameter algorithm that extends DistanceAlgorithm (reuses distance calculation)
 template<typename GraphType>
 class DiameterAlgorithm : public DistanceAlgorithm<GraphType> {
+private:
+    int calculatedDiameter = -1;  // Store the calculated diameter
+    bool isApproximate = false;   // Flag to track if approximate method was used
+    int sampleSize = 0;           // Store sample size for approximate method
 public:
     DiameterAlgorithm(const GraphType* g) : DistanceAlgorithm<GraphType>(g) {}
 
     int getDiameter() {
         int diameter = 0;
         int numVertices = this->graph->getNumVertices();
-
-        // Otimização avançada: Para grafos muito grandes, pode pular alguns vértices
-        // mas para manter a correção, faremos apenas a otimização básica
 
         // Otimização: Apenas O(n) BFS calls em vez de O(n²)
         // Para cada vértice, calcula distâncias para todos os outros de uma vez
@@ -468,7 +504,37 @@ public:
                 }
             }
         }
+        calculatedDiameter = diameter;
+        isApproximate = false;
+        return diameter;
+    }
 
+    // Approximate diameter algorithm for large graphs
+    int getApproximateDiameter(int sampleSize = 100) {
+        int diameter = 0;
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(1, this->graph->getNumVertices());
+
+        for (int s = 0; s < sampleSize; s++) {
+            int startVertex = dis(gen);
+            this->execute(startVertex);
+
+            // Find the farthest vertex from startVertex
+            int maxDistance = 0;
+            for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+                if (this->visited[i] && this->level[i] > maxDistance) {
+                    maxDistance = this->level[i];
+                }
+            }
+
+            if (maxDistance > diameter) {
+                diameter = maxDistance;
+            }
+        }
+        calculatedDiameter = diameter;
+        isApproximate = true;
+        this->sampleSize = sampleSize;
         return diameter;
     }
 
@@ -482,8 +548,13 @@ public:
 
         outFile << "GRAPH DIAMETER" << std::endl;
         outFile << "==============" << std::endl;
-        outFile << "Diameter: " << getDiameter() << std::endl;
-        outFile << std::endl;
+        if (calculatedDiameter == -1) {
+            outFile << "Error: No diameter calculation performed!" << std::endl;
+        } else if (isApproximate) {
+            outFile << "Approximate Diameter (sample size: " << sampleSize << "): " << calculatedDiameter << std::endl;
+        } else {
+            outFile << "Diameter: " << calculatedDiameter << std::endl;
+        }
     }
 };
 
@@ -646,6 +717,24 @@ void runBFS(const GraphType& graph, int startVertex, const std::string& outputFi
 }
 
 template <typename GraphType>
+void runMultipleBFS(const GraphType& graph, int numTests = 100) {
+    BFSAlgorithm<GraphType> bfs(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, graph.getNumVertices());
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto startBFS = std::chrono::high_resolution_clock::now();
+        bfs.execute(startVertex);
+        auto endBFS = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsedBFS = endBFS - startBFS;
+        std::cout << elapsedBFS.count() << "\n";
+    }
+}
+
+template <typename GraphType>
 void runDFS(const GraphType& graph, int startVertex, const std::string& outputFilename) {
     DFSAlgorithm<GraphType> dfs(&graph);
     dfs.execute(startVertex);
@@ -654,11 +743,38 @@ void runDFS(const GraphType& graph, int startVertex, const std::string& outputFi
 }
 
 template <typename GraphType>
+void runMultipleDFS(const GraphType& graph, int numTests = 100) {
+    DFSAlgorithm<GraphType> dfs(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, 10000);
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto startDFS = std::chrono::high_resolution_clock::now();
+        dfs.execute(startVertex);
+        auto endDFS = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsedDFS = endDFS - startDFS;
+        std::cout << elapsedDFS.count() << "\n";
+    }
+}
+
+template <typename GraphType>
 void runDiameter(const GraphType& graph, const std::string& outputFilename) {
     DiameterAlgorithm<GraphType> diameter(&graph);
     diameter.execute(1); // Start vertex doesn't matter for diameter calculation
     diameter.printResults(outputFilename);
     std::cout << "Diameter results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runApproximateDiameter(const GraphType& graph, const std::string& outputFilename, int sampleSize = 100) {
+    DiameterAlgorithm<GraphType> diameter(&graph);
+    diameter.getApproximateDiameter(sampleSize);  // Calculate approximate diameter
+    diameter.execute(1); // Start vertex doesn't matter for diameter calculation
+    diameter.printResults(outputFilename);
+    std::cout << "Approximate diameter results (sample size: " << sampleSize << ") saved to: " << outputFilename << std::endl;
 }
 
 template <typename GraphType>
@@ -741,22 +857,28 @@ size_t getMemoryUsageBytes() {
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <filename> <mode> <operation> [options]\n\n";
     std::cout << "Mode:\n";
-    std::cout << "  adjacencyMatrix  - Use adjacency matrix representation\n";
-    std::cout << "  adjacencyList    - Use adjacency list representation\n\n";
+    std::cout << "  adjacencyMatrix                  - Use adjacency matrix representation\n";
+    std::cout << "  adjacencyList                    - Use adjacency list representation\n\n";
     std::cout << "Operations:\n";
-    std::cout << "  stats            - Generate graph statistics only\n";
-    std::cout << "  bfs <startVertex>- Run BFS from specified start vertex\n";
-    std::cout << "  dfs <startVertex>- Run DFS from specified start vertex\n";
-    std::cout << "  diameter         - Calculate graph diameter\n";
-    std::cout << "  components       - Find connected components\n";
-    std::cout << "  all <startVertex>- Run all algorithms (full analysis)\n\n";
+    std::cout << "  stats                            - Generate graph statistics only\n";
+    std::cout << "  bfs <startVertex>                - Run BFS from specified start vertex\n";
+    std::cout << "  dfs <startVertex>                - Run DFS from specified start vertex\n";
+    std::cout << "  multipleBfs <numTests>           - Run BFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  multipleDfs <numTests>           - Run DFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  diameter                         - Calculate graph diameter\n";
+    std::cout << "  approximateDiameter <sampleSize> - Calculate approximate graph diameter (for large graphs. <sampleSize> is optional, default 100)\n";
+    std::cout << "  components                       - Find connected components\n";
+    std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
+    std::cout << "Options:\n";
+    std::cout << "  --memory                         - Print memory usage information\n";
+    std::cout << "  --timing                         - Print graph loading time\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " graph.txt adjacencyList stats\n";
     std::cout << "  " << programName << " graph.txt adjacencyMatrix bfs 1\n";
-    std::cout << "  " << programName << " graph.txt adjacencyList dfs 3\n";
-    std::cout << "  " << programName << " graph.txt adjacencyMatrix diameter\n";
+    std::cout << "  " << programName << " graph.txt adjacencyList dfs 3 --memory\n";
+    std::cout << "  " << programName << " graph.txt adjacencyMatrix diameter --memory --timing\n";
     std::cout << "  " << programName << " graph.txt adjacencyList components\n";
-    std::cout << "  " << programName << " graph.txt adjacencyMatrix all 1\n";
+    std::cout << "  " << programName << " graph.txt adjacencyMatrix all 1 --memory\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -769,6 +891,18 @@ int main(int argc, char* argv[]) {
     std::string mode = argv[2];
     std::string operation = argv[3];
 
+    bool printMemory = false;
+    bool printTiming = false;
+
+    for (int i = 4; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--memory") {
+            printMemory = true;
+        } else if (arg == "--timing") {
+            printTiming = true;
+        }
+    }
+
     if (mode != "adjacencyMatrix" && mode != "adjacencyList") {
         std::cerr << "Error: Invalid mode. Use 'adjacencyMatrix' or 'adjacencyList'.\n";
         return 1;
@@ -776,11 +910,22 @@ int main(int argc, char* argv[]) {
 
     try {
         std::variant<AdjacencyMatrixGraph, AdjacencyListGraph> graph;
+        auto start = std::chrono::high_resolution_clock::now();
 
         if (mode == "adjacencyMatrix") {
             graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename);
         } else {
             graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename);
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+
+        if (printMemory) {
+            std::cout << "Memory usage: " << getMemoryUsageBytes() << " bytes\n";
+        }
+
+        if (printTiming) {
+            std::chrono::duration<double> elapsed = end - start;
+            std::cout << "Time taken to read graph: " << elapsed.count() << " seconds\n";
         }
 
         if (operation == "stats") {
@@ -788,26 +933,31 @@ int main(int argc, char* argv[]) {
             std::visit([&](auto& g) { generateGraphStatistics(g, outputFilename); }, graph);
         }
         else if (operation == "bfs") {
-            if (argc < 5) {
-                std::cerr << "Error: BFS requires a start vertex.\n";
-                return 1;
-            }
-            int startVertex = std::stoi(argv[4]);
+            int startVertex = (argc > 4) ? std::stoi(argv[4]) : 1;
             std::string outputFilename = generateOutputFilename(filename, mode, "bfs");
             std::visit([&](auto& g) { runBFS(g, startVertex, outputFilename); }, graph);
         }
         else if (operation == "dfs") {
-            if (argc < 5) {
-                std::cerr << "Error: DFS requires a start vertex.\n";
-                return 1;
-            }
-            int startVertex = std::stoi(argv[4]);
+            int startVertex = (argc > 4) ? std::stoi(argv[4]) : 1;
             std::string outputFilename = generateOutputFilename(filename, mode, "dfs");
             std::visit([&](auto& g) { runDFS(g, startVertex, outputFilename); }, graph);
+        }
+        else if (operation == "multipleBfs") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleBFS(g, numTests); }, graph);
+        }
+        else if (operation == "multipleDfs") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleDFS(g, numTests); }, graph);
         }
         else if (operation == "diameter") {
             std::string outputFilename = generateOutputFilename(filename, mode, "diameter");
             std::visit([&](auto& g) { runDiameter(g, outputFilename); }, graph);
+        }
+        else if (operation == "approximateDiameter") {
+            int sampleSize = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::string outputFilename = generateOutputFilename(filename, mode, "approx_diameter");
+            std::visit([&](auto& g) { runApproximateDiameter(g, outputFilename, sampleSize); }, graph);
         }
         else if (operation == "components") {
             std::string outputFilename = generateOutputFilename(filename, mode, "components");
