@@ -254,6 +254,12 @@ public:
     virtual void execute(int startVertex) = 0;
     virtual void printResults(const std::string& outputFilename) = 0;
 
+
+    // Public accessors for testing
+    int getParent(int vertex) const { return parent[vertex]; }
+    int getLevel(int vertex) const { return level[vertex]; }
+    bool isVisited(int vertex) const { return visited[vertex]; }
+
 protected:
     void reset() {
         std::fill(visited.begin(), visited.end(), false);
@@ -763,6 +769,7 @@ void runMultipleDFS(const GraphType& graph, int numTests = 100) {
 template <typename GraphType>
 void runDiameter(const GraphType& graph, const std::string& outputFilename) {
     DiameterAlgorithm<GraphType> diameter(&graph);
+    diameter.getDiameter();  // Calculate exact diameter
     diameter.execute(1); // Start vertex doesn't matter for diameter calculation
     diameter.printResults(outputFilename);
     std::cout << "Diameter results saved to: " << outputFilename << std::endl;
@@ -783,6 +790,98 @@ void runComponents(const GraphType& graph, const std::string& outputFilename) {
     components.execute(); // Find all components
     components.printResults(outputFilename);
     std::cout << "Connected components results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void measureBfsDistances(const GraphType& graph) {
+    DistanceAlgorithm<GraphType> bfs(&graph);
+    bfs.execute(1);
+    std::vector<std::pair<int, int>> vertexPairs = {{10, 20}, {10, 30}, {20, 30}};
+
+    try {
+        for (const auto& pair : vertexPairs) {
+            int from = pair.first;
+            int to = pair.second;
+            int distance = bfs.getDistance(from, to);
+            if (distance != -1) {
+                std::cout << "Distance from " << from << " to " << to << " is " << distance << std::endl;
+            } else {
+                std::cout << "No path exists from " << from << " to " << to << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void measureDfsDistances(const GraphType& graph) {
+    DistanceAlgorithm<GraphType> dfs(&graph);
+    dfs.execute(1);
+    std::vector<std::pair<int, int>> vertexPairs = {{10, 20}, {10, 30}, {20, 30}};
+
+    try {
+        for (const auto& pair : vertexPairs) {
+            int from = pair.first;
+            int to = pair.second;
+            int distance = dfs.getDistance(from, to);
+            if (distance != -1) {
+                std::cout << "Distance from " << from << " to " << to << " is " << distance << std::endl;
+            } else {
+                std::cout << "No path exists from " << from << " to " << to << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void findBfsParents(const GraphType& graph) {
+    BFSAlgorithm<GraphType> bfs(&graph);
+
+    std::vector<int> startVertices = {1, 2, 3};
+    std::vector<int> targetVertices = {10, 20, 30};
+
+    try {
+        for (int sv : startVertices) {
+            bfs.execute(sv);
+            for (int tv : targetVertices) {
+                int parent = bfs.getParent(tv);
+                if (parent != -1) {
+                    std::cout << "Parent of " << tv << " when starting from " << sv << " is " << parent << std::endl;
+                } else {
+                    std::cout << tv << " has no parent when starting from " << sv << std::endl;
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void findDfsParents(const GraphType& graph) {
+    DFSAlgorithm<GraphType> dfs(&graph);
+
+    std::vector<int> startVertices = {1, 2, 3};
+    std::vector<int> targetVertices = {10, 20, 30};
+
+    try {
+        for (int sv : startVertices) {
+            dfs.execute(sv);
+            for (int tv : targetVertices) {
+                int parent = dfs.getParent(tv);
+                if (parent != -1) {
+                    std::cout << "Parent of " << tv << " when starting from " << sv << " is " << parent << std::endl;
+                } else {
+                    std::cout << tv << " has no parent when starting from " << sv << std::endl;
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
 }
 
 template <typename GraphType>
@@ -868,6 +967,10 @@ void printUsage(const char* programName) {
     std::cout << "  diameter                         - Calculate graph diameter\n";
     std::cout << "  approximateDiameter <sampleSize> - Calculate approximate graph diameter (for large graphs. <sampleSize> is optional, default 100)\n";
     std::cout << "  components                       - Find connected components\n";
+    std::cout << "  measureBfsDistances              - Measure distances between specific vertex pairs using BFS\n";
+    std::cout << "  measureDfsDistances              - Measure distances between specific vertex pairs using DFS\n";
+    std::cout << "  findBfsParents                   - Find parents of specific vertices using BFS. \n";
+    std::cout << "  findDfsParents                   - Find parents of specific vertices using DFS. \n";
     std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
     std::cout << "Options:\n";
     std::cout << "  --memory                         - Print memory usage information\n";
@@ -962,6 +1065,18 @@ int main(int argc, char* argv[]) {
         else if (operation == "components") {
             std::string outputFilename = generateOutputFilename(filename, mode, "components");
             std::visit([&](auto& g) { runComponents(g, outputFilename); }, graph);
+        }
+        else if (operation == "measureBfsDistances") {
+            std::visit([&](auto& g) { measureBfsDistances(g); }, graph);
+        }
+        else if (operation == "measureDfsDistances") {
+            std::visit([&](auto& g) { measureDfsDistances(g); }, graph);
+        }
+        else if (operation == "findBfsParents") {
+            std::visit([&](auto& g) { findBfsParents(g); }, graph);
+        }
+        else if (operation == "findDfsParents") {
+            std::visit([&](auto& g) { findDfsParents(g); }, graph);
         }
         else if (operation == "all") {
             if (argc < 5) {
