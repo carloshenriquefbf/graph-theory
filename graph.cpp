@@ -9,6 +9,12 @@
 #include <iomanip>
 #include <queue>
 #include <stack>
+#include <unistd.h>
+#include <sstream>
+#include <mach/mach.h>
+#include <chrono>
+#include <variant>
+#include <random>
 
 // ============================================================================
 // GRAPH REPRESENTATIONS
@@ -107,7 +113,7 @@ public:
         }
         return neighbors;
     }
-    
+
     // Otimização: versão que evita cópia desnecessária para AdjacencyList
     const std::set<int>& getNeighborsSet(int vertex) const {
         return adjacencyList[vertex];
@@ -233,7 +239,7 @@ protected:
     std::vector<bool> visited;
     std::vector<int> parent;
     std::vector<int> level;
-    
+
 public:
     GraphAlgorithm(const GraphType* g) : graph(g) {
         if (graph) {
@@ -242,12 +248,18 @@ public:
             level.resize(graph->getNumVertices() + 1, -1);
         }
     }
-    
+
     virtual ~GraphAlgorithm() = default;
-    
+
     virtual void execute(int startVertex) = 0;
     virtual void printResults(const std::string& outputFilename) = 0;
-    
+
+
+    // Public accessors for testing
+    int getParent(int vertex) const { return parent[vertex]; }
+    int getLevel(int vertex) const { return level[vertex]; }
+    bool isVisited(int vertex) const { return visited[vertex]; }
+
 protected:
     void reset() {
         std::fill(visited.begin(), visited.end(), false);
@@ -261,34 +273,34 @@ template<typename GraphType>
 class BFSAlgorithm : public GraphAlgorithm<GraphType> {
 protected:
     std::queue<int> bfsQueue;
-    
+
 public:
     BFSAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g) {}
-    
+
     void execute(int startVertex) override {
         this->reset();
-        
+
         if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
             throw std::invalid_argument("Invalid start vertex");
         }
-        
+
         // Limpa a queue para garantir estado limpo
         while (!bfsQueue.empty()) {
             bfsQueue.pop();
         }
-        
+
         this->visited[startVertex] = true;
         this->level[startVertex] = 0;
         this->parent[startVertex] = -1; // Root has no parent
         bfsQueue.push(startVertex);
-        
+
         while (!bfsQueue.empty()) {
             int current = bfsQueue.front();
             bfsQueue.pop();
-            
+
             // Get neighbors based on graph type
             std::vector<int> neighbors = getNeighbors(current);
-            
+
             for (int neighbor : neighbors) {
                 if (!this->visited[neighbor]) {
                     this->visited[neighbor] = true;
@@ -299,18 +311,18 @@ public:
             }
         }
     }
-    
+
     void printResults(const std::string& outputFilename) override {
         std::ofstream outFile(outputFilename, std::ios::app);
         if (!outFile.is_open()) {
             throw std::runtime_error("Cannot open file: " + outputFilename);
         }
-        
+
         outFile << "\nBFS TREE" << std::endl;
         outFile << "========" << std::endl;
         outFile << "Vertex | Parent | Level" << std::endl;
         outFile << "-------|--------|------" << std::endl;
-        
+
         for (int i = 1; i <= this->graph->getNumVertices(); i++) {
             if (this->visited[i]) {
                 outFile << std::setw(6) << i << " | ";
@@ -324,7 +336,7 @@ public:
         }
         outFile << std::endl;
     }
-    
+
 protected:
     std::vector<int> getNeighbors(int vertex) {
         return this->graph->getNeighbors(vertex);
@@ -336,36 +348,36 @@ template<typename GraphType>
 class DFSAlgorithm : public GraphAlgorithm<GraphType> {
 protected:
     std::stack<int> dfsStack;
-    
+
 public:
     DFSAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g) {}
-    
+
     void execute(int startVertex) override {
         this->reset();
-        
+
         if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
             throw std::invalid_argument("Invalid start vertex");
         }
-        
+
         // Limpa o stack para garantir estado limpo
         while (!dfsStack.empty()) {
             dfsStack.pop();
         }
-        
-        dfsRecursive(startVertex, -1, 0);
+
+        dfsIterative(startVertex);
     }
-    
+
     void printResults(const std::string& outputFilename) override {
         std::ofstream outFile(outputFilename, std::ios::app);
         if (!outFile.is_open()) {
             throw std::runtime_error("Cannot open file: " + outputFilename);
         }
-        
+
         outFile << "\nDFS TREE" << std::endl;
         outFile << "========" << std::endl;
         outFile << "Vertex | Parent | Level" << std::endl;
         outFile << "-------|--------|------" << std::endl;
-        
+
         for (int i = 1; i <= this->graph->getNumVertices(); i++) {
             if (this->visited[i]) {
                 outFile << std::setw(6) << i << " | ";
@@ -379,22 +391,56 @@ public:
         }
         outFile << std::endl;
     }
-    
+
 protected:
     std::vector<int> getNeighbors(int vertex) {
         return this->graph->getNeighbors(vertex);
     }
-    
+
 private:
+    [[deprecated("Use dfsIterative() instead. Recursive version causes stack overflow on large graphs.")]]
     void dfsRecursive(int vertex, int parent, int level) {
         this->visited[vertex] = true;
         this->parent[vertex] = parent;
         this->level[vertex] = level;
-        
+
         std::vector<int> neighbors = getNeighbors(vertex);
         for (int neighbor : neighbors) {
             if (!this->visited[neighbor]) {
                 dfsRecursive(neighbor, vertex, level + 1);
+            }
+        }
+    }
+
+    void dfsIterative(int startVertex) {
+        // Implementação iterativa para evitar stack overflow em grafos grandes
+        std::stack<std::pair<int, std::pair<int, int>>> stack; // {vertex, {parent, level}}
+        stack.push({startVertex, {-1, 0}});
+
+        while (!stack.empty()) {
+            auto current = stack.top();
+            stack.pop();
+
+            int vertex = current.first;
+            int parent = current.second.first;
+            int level = current.second.second;
+
+            // Verificação de bounds para evitar segmentation fault
+            if (vertex < 1 || static_cast<size_t>(vertex) >= this->visited.size()) {
+                continue;
+            }
+
+            if (this->visited[vertex]) continue;
+
+            this->visited[vertex] = true;
+            this->parent[vertex] = parent;
+            this->level[vertex] = level;
+
+            std::vector<int> neighbors = getNeighbors(vertex);
+            for (int neighbor : neighbors) {
+                if (neighbor >= 1 && static_cast<size_t>(neighbor) < this->visited.size() && !this->visited[neighbor]) {
+                    stack.push({neighbor, {vertex, level + 1}});
+                }
             }
         }
     }
@@ -405,32 +451,32 @@ template<typename GraphType>
 class DistanceAlgorithm : public BFSAlgorithm<GraphType> {
 public:
     DistanceAlgorithm(const GraphType* g) : BFSAlgorithm<GraphType>(g) {}
-    
+
     int getDistance(int from, int to) {
         // REUTILIZAÇÃO: Usa a implementação de BFS para encontrar distância
         this->execute(from);
-        
+
         if (!this->visited[to]) {
             return -1; // No path exists
         }
-        
+
         return this->level[to];
     }
-    
+
     // Otimização: BFS que calcula distâncias de um vértice para todos os outros
     std::vector<int> getAllDistancesFrom(int source) {
         this->execute(source);
         std::vector<int> distances(this->graph->getNumVertices() + 1, -1);
-        
+
         for (int i = 1; i <= this->graph->getNumVertices(); i++) {
             if (this->visited[i]) {
                 distances[i] = this->level[i];
             }
         }
-        
+
         return distances;
     }
-    
+
     void printResults(const std::string& outputFilename) override {
         // BFS tree is already printed by parent class
         // This method can be overridden to add distance-specific output
@@ -441,21 +487,22 @@ public:
 // Diameter algorithm that extends DistanceAlgorithm (reuses distance calculation)
 template<typename GraphType>
 class DiameterAlgorithm : public DistanceAlgorithm<GraphType> {
+private:
+    int calculatedDiameter = -1;  // Store the calculated diameter
+    bool isApproximate = false;   // Flag to track if approximate method was used
+    int sampleSize = 0;           // Store sample size for approximate method
 public:
     DiameterAlgorithm(const GraphType* g) : DistanceAlgorithm<GraphType>(g) {}
-    
+
     int getDiameter() {
         int diameter = 0;
         int numVertices = this->graph->getNumVertices();
-        
-        // Otimização avançada: Para grafos muito grandes, pode pular alguns vértices
-        // mas para manter a correção, faremos apenas a otimização básica
-        
+
         // Otimização: Apenas O(n) BFS calls em vez de O(n²)
         // Para cada vértice, calcula distâncias para todos os outros de uma vez
         for (int i = 1; i <= numVertices; i++) {
             std::vector<int> distances = this->getAllDistancesFrom(i);
-            
+
             // Encontra a maior distância a partir deste vértice
             for (int j = 1; j <= numVertices; j++) {
                 if (distances[j] > diameter) {
@@ -463,22 +510,57 @@ public:
                 }
             }
         }
-        
+        calculatedDiameter = diameter;
+        isApproximate = false;
         return diameter;
     }
-    
+
+    // Approximate diameter algorithm for large graphs
+    int getApproximateDiameter(int sampleSize = 100) {
+        int diameter = 0;
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(1, this->graph->getNumVertices());
+
+        for (int s = 0; s < sampleSize; s++) {
+            int startVertex = dis(gen);
+            this->execute(startVertex);
+
+            // Find the farthest vertex from startVertex
+            int maxDistance = 0;
+            for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+                if (this->visited[i] && this->level[i] > maxDistance) {
+                    maxDistance = this->level[i];
+                }
+            }
+
+            if (maxDistance > diameter) {
+                diameter = maxDistance;
+            }
+        }
+        calculatedDiameter = diameter;
+        isApproximate = true;
+        this->sampleSize = sampleSize;
+        return diameter;
+    }
+
     void printResults(const std::string& outputFilename) override {
         DistanceAlgorithm<GraphType>::printResults(outputFilename);
-        
+
         std::ofstream outFile(outputFilename, std::ios::app);
         if (!outFile.is_open()) {
             throw std::runtime_error("Cannot open file: " + outputFilename);
         }
-        
+
         outFile << "GRAPH DIAMETER" << std::endl;
         outFile << "==============" << std::endl;
-        outFile << "Diameter: " << getDiameter() << std::endl;
-        outFile << std::endl;
+        if (calculatedDiameter == -1) {
+            outFile << "Error: No diameter calculation performed!" << std::endl;
+        } else if (isApproximate) {
+            outFile << "Approximate Diameter (sample size: " << sampleSize << "): " << calculatedDiameter << std::endl;
+        } else {
+            outFile << "Diameter: " << calculatedDiameter << std::endl;
+        }
     }
 };
 
@@ -487,14 +569,14 @@ template<typename GraphType>
 class ConnectedComponentsAlgorithm : public DFSAlgorithm<GraphType> {
 private:
     std::vector<std::vector<int>> components;
-    
+
 public:
     ConnectedComponentsAlgorithm(const GraphType* g) : DFSAlgorithm<GraphType>(g) {}
-    
+
     void execute(int startVertex = -1) override {
         components.clear();
         this->reset();
-        
+
         // If no start vertex specified, find all components
         if (startVertex == -1) {
             for (int i = 1; i <= this->graph->getNumVertices(); i++) {
@@ -509,7 +591,7 @@ public:
         } else {
             // REUTILIZAÇÃO: Usa a implementação de DFS para componente específico
             DFSAlgorithm<GraphType>::execute(startVertex);
-            
+
             // Extract component from visited vertices
             std::vector<int> component;
             for (int i = 1; i <= this->graph->getNumVertices(); i++) {
@@ -521,25 +603,25 @@ public:
                 components.push_back(component);
             }
         }
-        
+
         // Sort components by size (descending order)
-        std::sort(components.begin(), components.end(), 
+        std::sort(components.begin(), components.end(),
                   [](const std::vector<int>& a, const std::vector<int>& b) {
                       return a.size() > b.size();
                   });
     }
-    
+
     void printResults(const std::string& outputFilename) override {
         std::ofstream outFile(outputFilename, std::ios::app);
         if (!outFile.is_open()) {
             throw std::runtime_error("Cannot open file: " + outputFilename);
         }
-        
+
         outFile << "CONNECTED COMPONENTS" << std::endl;
         outFile << "====================" << std::endl;
         outFile << "Number of components: " << components.size() << std::endl;
         outFile << std::endl;
-        
+
         for (size_t i = 0; i < components.size(); i++) {
             outFile << "Component " << (i + 1) << " (size: " << components[i].size() << "): ";
             for (size_t j = 0; j < components[i].size(); j++) {
@@ -550,19 +632,19 @@ public:
         }
         outFile << std::endl;
     }
-    
+
 private:
     void findComponent(int startVertex, std::vector<int>& component) {
         // Otimização: DFS iterativo em vez de recursivo para evitar stack overflow
         std::stack<int> stack;
         stack.push(startVertex);
         this->visited[startVertex] = true;
-        
+
         while (!stack.empty()) {
             int current = stack.top();
             stack.pop();
             component.push_back(current);
-            
+
             std::vector<int> neighbors = this->getNeighbors(current);
             for (int neighbor : neighbors) {
                 if (!this->visited[neighbor]) {
@@ -610,7 +692,200 @@ public:
 };
 
 template <typename GraphType>
-void generateGraphStatistics(const GraphType& graph, const std::string& outputFilename, int startVertex = 1) {
+void generateGraphStatistics(const GraphType& graph, const std::string& outputFilename) {
+    std::ofstream outFile(outputFilename);
+
+    if (!outFile.is_open()) {
+        throw std::runtime_error("Error creating file " + outputFilename);
+    }
+
+    outFile << std::fixed << std::setprecision(2);
+
+    outFile << "GRAPH STATISTICS" << std::endl;
+    outFile << "================" << std::endl;
+    outFile << "Number of vertices: " << graph.getNumVertices() << std::endl;
+    outFile << "Number of edges: " << graph.getNumEdges() << std::endl;
+    outFile << "Minimum degree: " << graph.getMinDegree() << std::endl;
+    outFile << "Maximum degree: " << graph.getMaxDegree() << std::endl;
+    outFile << "Average degree: " << graph.getAverageDegree() << std::endl;
+    outFile << "Median degree: " << graph.getMedianDegree() << std::endl;
+
+    outFile.close();
+    std::cout << "Graph statistics saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runBFS(const GraphType& graph, int startVertex, const std::string& outputFilename) {
+    BFSAlgorithm<GraphType> bfs(&graph);
+    bfs.execute(startVertex);
+    bfs.printResults(outputFilename);
+    std::cout << "BFS results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runMultipleBFS(const GraphType& graph, int numTests = 100) {
+    BFSAlgorithm<GraphType> bfs(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, graph.getNumVertices());
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto startBFS = std::chrono::high_resolution_clock::now();
+        bfs.execute(startVertex);
+        auto endBFS = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsedBFS = endBFS - startBFS;
+        std::cout << elapsedBFS.count() << "\n";
+    }
+}
+
+template <typename GraphType>
+void runDFS(const GraphType& graph, int startVertex, const std::string& outputFilename) {
+    DFSAlgorithm<GraphType> dfs(&graph);
+    dfs.execute(startVertex);
+    dfs.printResults(outputFilename);
+    std::cout << "DFS results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runMultipleDFS(const GraphType& graph, int numTests = 100) {
+    DFSAlgorithm<GraphType> dfs(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, 10000);
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto startDFS = std::chrono::high_resolution_clock::now();
+        dfs.execute(startVertex);
+        auto endDFS = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsedDFS = endDFS - startDFS;
+        std::cout << elapsedDFS.count() << "\n";
+    }
+}
+
+template <typename GraphType>
+void runDiameter(const GraphType& graph, const std::string& outputFilename) {
+    DiameterAlgorithm<GraphType> diameter(&graph);
+    diameter.getDiameter();  // Calculate exact diameter
+    diameter.execute(1); // Start vertex doesn't matter for diameter calculation
+    diameter.printResults(outputFilename);
+    std::cout << "Diameter results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runApproximateDiameter(const GraphType& graph, const std::string& outputFilename, int sampleSize = 100) {
+    DiameterAlgorithm<GraphType> diameter(&graph);
+    diameter.getApproximateDiameter(sampleSize);  // Calculate approximate diameter
+    diameter.execute(1); // Start vertex doesn't matter for diameter calculation
+    diameter.printResults(outputFilename);
+    std::cout << "Approximate diameter results (sample size: " << sampleSize << ") saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runComponents(const GraphType& graph, const std::string& outputFilename) {
+    ConnectedComponentsAlgorithm<GraphType> components(&graph);
+    components.execute(); // Find all components
+    components.printResults(outputFilename);
+    std::cout << "Connected components results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void measureBfsDistances(const GraphType& graph) {
+    DistanceAlgorithm<GraphType> bfs(&graph);
+    bfs.execute(1);
+    std::vector<std::pair<int, int>> vertexPairs = {{10, 20}, {10, 30}, {20, 30}};
+
+    try {
+        for (const auto& pair : vertexPairs) {
+            int from = pair.first;
+            int to = pair.second;
+            int distance = bfs.getDistance(from, to);
+            if (distance != -1) {
+                std::cout << "Distance from " << from << " to " << to << " is " << distance << std::endl;
+            } else {
+                std::cout << "No path exists from " << from << " to " << to << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void measureDfsDistances(const GraphType& graph) {
+    DistanceAlgorithm<GraphType> dfs(&graph);
+    dfs.execute(1);
+    std::vector<std::pair<int, int>> vertexPairs = {{10, 20}, {10, 30}, {20, 30}};
+
+    try {
+        for (const auto& pair : vertexPairs) {
+            int from = pair.first;
+            int to = pair.second;
+            int distance = dfs.getDistance(from, to);
+            if (distance != -1) {
+                std::cout << "Distance from " << from << " to " << to << " is " << distance << std::endl;
+            } else {
+                std::cout << "No path exists from " << from << " to " << to << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void findBfsParents(const GraphType& graph) {
+    BFSAlgorithm<GraphType> bfs(&graph);
+
+    std::vector<int> startVertices = {1, 2, 3};
+    std::vector<int> targetVertices = {10, 20, 30};
+
+    try {
+        for (int sv : startVertices) {
+            bfs.execute(sv);
+            for (int tv : targetVertices) {
+                int parent = bfs.getParent(tv);
+                if (parent != -1) {
+                    std::cout << "Parent of " << tv << " when starting from " << sv << " is " << parent << std::endl;
+                } else {
+                    std::cout << tv << " has no parent when starting from " << sv << std::endl;
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void findDfsParents(const GraphType& graph) {
+    DFSAlgorithm<GraphType> dfs(&graph);
+
+    std::vector<int> startVertices = {1, 2, 3};
+    std::vector<int> targetVertices = {10, 20, 30};
+
+    try {
+        for (int sv : startVertices) {
+            dfs.execute(sv);
+            for (int tv : targetVertices) {
+                int parent = dfs.getParent(tv);
+                if (parent != -1) {
+                    std::cout << "Parent of " << tv << " when starting from " << sv << " is " << parent << std::endl;
+                } else {
+                    std::cout << tv << " has no parent when starting from " << sv << std::endl;
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void runFullAnalysis(const GraphType& graph, const std::string& outputFilename, int startVertex) {
     std::ofstream outFile(outputFilename);
 
     if (!outFile.is_open()) {
@@ -656,48 +931,166 @@ void generateGraphStatistics(const GraphType& graph, const std::string& outputFi
         std::cerr << "Error executing algorithms: " << e.what() << std::endl;
     }
 
-    std::cout << "Statistics and algorithms saved to: " << outputFilename << std::endl;
+    std::cout << "Full analysis saved to: " << outputFilename << std::endl;
 }
 
-std::string generateOutputFilename(const std::string& inputFilename, const std::string& mode) {
+std::string generateOutputFilename(const std::string& inputFilename, const std::string& mode, const std::string& operation) {
     size_t lastDot = inputFilename.find_last_of(".");
     std::string baseName = (lastDot == std::string::npos) ? inputFilename : inputFilename.substr(0, lastDot);
-    return baseName + "_" + mode + "_info.txt";
+    return baseName + "_" + mode + "_" + operation + ".txt";
+}
+
+// MacOS specific memory usage function
+size_t getMemoryUsageBytes() {
+    struct task_basic_info info;
+    mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(),
+                  TASK_BASIC_INFO,
+                  reinterpret_cast<task_info_t>(&info),
+                  &count) == KERN_SUCCESS) {
+        return info.resident_size;
+    }
+    return 0;
+}
+
+void printUsage(const char* programName) {
+    std::cout << "Usage: " << programName << " <filename> <mode> <operation> [options]\n\n";
+    std::cout << "Mode:\n";
+    std::cout << "  adjacencyMatrix                  - Use adjacency matrix representation\n";
+    std::cout << "  adjacencyList                    - Use adjacency list representation\n\n";
+    std::cout << "Operations:\n";
+    std::cout << "  stats                            - Generate graph statistics only\n";
+    std::cout << "  bfs <startVertex>                - Run BFS from specified start vertex\n";
+    std::cout << "  dfs <startVertex>                - Run DFS from specified start vertex\n";
+    std::cout << "  multipleBfs <numTests>           - Run BFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  multipleDfs <numTests>           - Run DFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  diameter                         - Calculate graph diameter\n";
+    std::cout << "  approximateDiameter <sampleSize> - Calculate approximate graph diameter (for large graphs. <sampleSize> is optional, default 100)\n";
+    std::cout << "  components                       - Find connected components\n";
+    std::cout << "  measureBfsDistances              - Measure distances between specific vertex pairs using BFS\n";
+    std::cout << "  measureDfsDistances              - Measure distances between specific vertex pairs using DFS\n";
+    std::cout << "  findBfsParents                   - Find parents of specific vertices using BFS. \n";
+    std::cout << "  findDfsParents                   - Find parents of specific vertices using DFS. \n";
+    std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
+    std::cout << "Options:\n";
+    std::cout << "  --memory                         - Print memory usage information\n";
+    std::cout << "  --timing                         - Print graph loading time\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  " << programName << " graph.txt adjacencyList stats\n";
+    std::cout << "  " << programName << " graph.txt adjacencyMatrix bfs 1\n";
+    std::cout << "  " << programName << " graph.txt adjacencyList dfs 3 --memory\n";
+    std::cout << "  " << programName << " graph.txt adjacencyMatrix diameter --memory --timing\n";
+    std::cout << "  " << programName << " graph.txt adjacencyList components\n";
+    std::cout << "  " << programName << " graph.txt adjacencyMatrix all 1 --memory\n";
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <filename> <mode (adjacencyMatrix | adjacencyList)> [startVertex]\n";
-        std::cerr << "startVertex is optional and defaults to 1\n";
+    if (argc < 4) {
+        printUsage(argv[0]);
         return 1;
     }
 
     std::string filename = argv[1];
     std::string mode = argv[2];
-    int startVertex = 1; // Default start vertex
-    
-    if (argc >= 4) {
-        try {
-            startVertex = std::stoi(argv[3]);
-        } catch (const std::exception& e) {
-            std::cerr << "Invalid start vertex: " << argv[3] << std::endl;
-            return 1;
+    std::string operation = argv[3];
+
+    bool printMemory = false;
+    bool printTiming = false;
+
+    for (int i = 4; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--memory") {
+            printMemory = true;
+        } else if (arg == "--timing") {
+            printTiming = true;
         }
     }
 
     if (mode != "adjacencyMatrix" && mode != "adjacencyList") {
-        std::cerr << "Invalid mode. Use 'adjacencyMatrix' or 'adjacencyList'.\n";
+        std::cerr << "Error: Invalid mode. Use 'adjacencyMatrix' or 'adjacencyList'.\n";
         return 1;
     }
+
     try {
+        std::variant<AdjacencyMatrixGraph, AdjacencyListGraph> graph;
+        auto start = std::chrono::high_resolution_clock::now();
+
         if (mode == "adjacencyMatrix") {
-            AdjacencyMatrixGraph graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename);
-            std::string outputFilename = generateOutputFilename(filename, mode);
-            generateGraphStatistics(graph, outputFilename, startVertex);
+            graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename);
         } else {
-            AdjacencyListGraph graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename);
-            std::string outputFilename = generateOutputFilename(filename, mode);
-            generateGraphStatistics(graph, outputFilename, startVertex);
+            graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename);
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+
+        if (printMemory) {
+            std::cout << "Memory usage: " << getMemoryUsageBytes() << " bytes\n";
+        }
+
+        if (printTiming) {
+            std::chrono::duration<double> elapsed = end - start;
+            std::cout << "Time taken to read graph: " << elapsed.count() << " seconds\n";
+        }
+
+        if (operation == "stats") {
+            std::string outputFilename = generateOutputFilename(filename, mode, "stats");
+            std::visit([&](auto& g) { generateGraphStatistics(g, outputFilename); }, graph);
+        }
+        else if (operation == "bfs") {
+            int startVertex = (argc > 4) ? std::stoi(argv[4]) : 1;
+            std::string outputFilename = generateOutputFilename(filename, mode, "bfs");
+            std::visit([&](auto& g) { runBFS(g, startVertex, outputFilename); }, graph);
+        }
+        else if (operation == "dfs") {
+            int startVertex = (argc > 4) ? std::stoi(argv[4]) : 1;
+            std::string outputFilename = generateOutputFilename(filename, mode, "dfs");
+            std::visit([&](auto& g) { runDFS(g, startVertex, outputFilename); }, graph);
+        }
+        else if (operation == "multipleBfs") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleBFS(g, numTests); }, graph);
+        }
+        else if (operation == "multipleDfs") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleDFS(g, numTests); }, graph);
+        }
+        else if (operation == "diameter") {
+            std::string outputFilename = generateOutputFilename(filename, mode, "diameter");
+            std::visit([&](auto& g) { runDiameter(g, outputFilename); }, graph);
+        }
+        else if (operation == "approximateDiameter") {
+            int sampleSize = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::string outputFilename = generateOutputFilename(filename, mode, "approx_diameter");
+            std::visit([&](auto& g) { runApproximateDiameter(g, outputFilename, sampleSize); }, graph);
+        }
+        else if (operation == "components") {
+            std::string outputFilename = generateOutputFilename(filename, mode, "components");
+            std::visit([&](auto& g) { runComponents(g, outputFilename); }, graph);
+        }
+        else if (operation == "measureBfsDistances") {
+            std::visit([&](auto& g) { measureBfsDistances(g); }, graph);
+        }
+        else if (operation == "measureDfsDistances") {
+            std::visit([&](auto& g) { measureDfsDistances(g); }, graph);
+        }
+        else if (operation == "findBfsParents") {
+            std::visit([&](auto& g) { findBfsParents(g); }, graph);
+        }
+        else if (operation == "findDfsParents") {
+            std::visit([&](auto& g) { findDfsParents(g); }, graph);
+        }
+        else if (operation == "all") {
+            if (argc < 5) {
+                std::cerr << "Error: Full analysis requires a start vertex.\n";
+                return 1;
+            }
+            int startVertex = std::stoi(argv[4]);
+            std::string outputFilename = generateOutputFilename(filename, mode, "info");
+            std::visit([&](auto& g) { runFullAnalysis(g, outputFilename, startVertex); }, graph);
+        }
+        else {
+            std::cerr << "Error: Invalid operation '" << operation << "'.\n";
+            printUsage(argv[0]);
+            return 1;
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

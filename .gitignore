@@ -7,3 +7,6 @@ tp1/grafo_3.txt
 tp1/grafo_4.txt
 tp1/grafo_5.txt
 tp1/grafo_6.txt
+
+.DS_Store
+*.log
