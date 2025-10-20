@@ -15,6 +15,7 @@
 #include <chrono>
 #include <variant>
 #include <random>
+#include <map>
 
 // ============================================================================
 // GRAPH REPRESENTATIONS
@@ -24,16 +25,16 @@
 class AdjacencyListGraph {
 private:
     int numVertices;
-    std::vector<std::set<int>> adjacencyList;
+    std::vector<std::map<int, double>> adjacencyList;
 
 public:
     AdjacencyListGraph(int vertices = 0) : numVertices(vertices) {
         adjacencyList.resize(vertices + 1);
     }
 
-    void addEdge(int u, int v) {
-        adjacencyList[u].insert(v);
-        adjacencyList[v].insert(u);
+    void addEdge(int u, int v, double weight) {
+        adjacencyList[u][v] = weight;
+        adjacencyList[v][u] = weight;
     }
 
     int getNumVertices() const {
@@ -98,8 +99,8 @@ public:
     void printAdjacencyList() const {
         for (int i = 1; i <= numVertices; i++) {
             std::cout << "Vertex " << i << ": ";
-            for (int neighbor : adjacencyList[i]) {
-                std::cout << neighbor << " ";
+            for (const auto& [neighbor, weight] : adjacencyList[i]) {
+                std::cout << neighbor << "(" << weight << ") ";
             }
             std::cout << std::endl;
         }
@@ -108,14 +109,33 @@ public:
     // Method to get neighbors for algorithms
     std::vector<int> getNeighbors(int vertex) const {
         std::vector<int> neighbors;
-        for (int neighbor : adjacencyList[vertex]) {
+        for (const auto& [neighbor, weight] : adjacencyList[vertex]) {
             neighbors.push_back(neighbor);
         }
         return neighbors;
     }
 
-    // Otimização: versão que evita cópia desnecessária para AdjacencyList
-    const std::set<int>& getNeighborsSet(int vertex) const {
+    std::vector<std::pair<int, double>> getNeighborsWithWeights(int vertex) const {
+        std::vector<std::pair<int, double>> neighbors;
+        for (const auto& [neighbor, weight] : adjacencyList[vertex]) {
+            neighbors.push_back({neighbor, weight});
+        }
+        return neighbors;
+    }
+
+    double getEdgeWeight(int u, int v) const {
+        auto it = adjacencyList[u].find(v);
+        if (it != adjacencyList[u].end()) {
+            return it->second;
+        }
+        return std::numeric_limits<double>::infinity();
+    }
+
+    bool hasEdge(int u, int v) const {
+        return adjacencyList[u].find(v) != adjacencyList[u].end();
+    }
+
+    const std::map<int, double>& getNeighborsMap(int vertex) const {
         return adjacencyList[vertex];
     }
 };
@@ -124,16 +144,17 @@ public:
 class AdjacencyMatrixGraph {
 private:
     int numVertices;
-    std::vector<std::vector<bool>> adjacencyMatrix;
+    std::vector<std::vector<double>> adjacencyMatrix;
+    static constexpr double NO_EDGE = std::numeric_limits<double>::infinity();
 
 public:
     AdjacencyMatrixGraph(int vertices = 0) : numVertices(vertices) {
-        adjacencyMatrix.resize(vertices + 1, std::vector<bool>(vertices + 1, false));
+        adjacencyMatrix.resize(vertices + 1, std::vector<double>(vertices + 1, NO_EDGE));
     }
 
-    void addEdge(int u, int v) {
-        adjacencyMatrix[u][v] = true;
-        adjacencyMatrix[v][u] = true;
+    void addEdge(int u, int v, double weight) {
+        adjacencyMatrix[u][v] = weight;
+        adjacencyMatrix[v][u] = weight;
     }
 
     int getNumVertices() const {
@@ -144,7 +165,7 @@ public:
         int edges = 0;
         for (int i = 1; i <= numVertices; i++) {
             for (int j = i + 1; j <= numVertices; j++) {
-                if (adjacencyMatrix[i][j]) {
+                if (adjacencyMatrix[i][j] != NO_EDGE) {
                     edges++;
                 }
             }
@@ -155,7 +176,7 @@ public:
     int getDegree(int vertex) const {
         int degree = 0;
         for (int j = 1; j <= numVertices; j++) {
-            if (adjacencyMatrix[vertex][j]) {
+            if (adjacencyMatrix[vertex][j] != NO_EDGE) {
                 degree++;
             }
         }
@@ -209,21 +230,42 @@ public:
         for (int i = 1; i <= numVertices; i++) {
             std::cout << "Vertex " << i << ": ";
             for (int j = 1; j <= numVertices; j++) {
-                std::cout << (adjacencyMatrix[i][j] ? 1 : 0) << " ";
+                if (adjacencyMatrix[i][j] != NO_EDGE) {
+                    std::cout << adjacencyMatrix[i][j] << " ";
+                } else {
+                    std::cout << "inf ";
+                }
             }
             std::cout << std::endl;
         }
     }
 
-    // Method to get neighbors for algorithms
     std::vector<int> getNeighbors(int vertex) const {
         std::vector<int> neighbors;
         for (int j = 1; j <= numVertices; j++) {
-            if (adjacencyMatrix[vertex][j]) {
+            if (adjacencyMatrix[vertex][j] != NO_EDGE) {
                 neighbors.push_back(j);
             }
         }
         return neighbors;
+    }
+
+    std::vector<std::pair<int, double>> getNeighborsWithWeights(int vertex) const {
+        std::vector<std::pair<int, double>> neighbors;
+        for (int j = 1; j <= numVertices; j++) {
+            if (adjacencyMatrix[vertex][j] != NO_EDGE) {
+                neighbors.push_back({j, adjacencyMatrix[vertex][j]});
+            }
+        }
+        return neighbors;
+    }
+
+    double getEdgeWeight(int u, int v) const {
+        return adjacencyMatrix[u][v];
+    }
+
+    bool hasEdge(int u, int v) const {
+        return adjacencyMatrix[u][v] != NO_EDGE;
     }
 };
 
@@ -261,7 +303,7 @@ public:
     bool isVisited(int vertex) const { return visited[vertex]; }
 
 protected:
-    void reset() {
+    virtual void reset() {
         std::fill(visited.begin(), visited.end(), false);
         std::fill(parent.begin(), parent.end(), -1);
         std::fill(level.begin(), level.end(), -1);
@@ -656,6 +698,273 @@ private:
     }
 };
 
+// Base class for Dijkstra algorithm
+template<typename GraphType>
+class DijkstraAlgorithm : public GraphAlgorithm<GraphType> {
+protected:
+    std::vector<double> distance;
+    bool hasNegativeWeights;
+    int sourceVertex;
+
+public:
+    DijkstraAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g), sourceVertex(-1) {
+        if (g) {
+            distance.resize(g->getNumVertices() + 1, std::numeric_limits<double>::infinity());
+        }
+        hasNegativeWeights = false;
+    }
+
+    virtual ~DijkstraAlgorithm() = default;
+
+    bool checkNegativeWeights() {
+        for (int u = 1; u <= this->graph->getNumVertices(); u++) {
+            auto neighbors = this->graph->getNeighborsWithWeights(u);
+            for (const auto& [v, weight] : neighbors) {
+                if (weight < 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    double getDistance(int vertex) const {
+        if (vertex < 1 || vertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid vertex");
+        }
+        return distance[vertex];
+    }
+
+    std::vector<double> getAllDistances() const {
+        return distance;
+    }
+
+    std::vector<int> getShortestPath(int destination) const {
+        if (destination < 1 || destination > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid destination vertex");
+        }
+
+        if (distance[destination] == std::numeric_limits<double>::infinity()) {
+            return {}; // No path exists
+        }
+
+        std::vector<int> path;
+        int current = destination;
+
+        while (current != -1) {
+            path.push_back(current);
+            current = this->parent[current];
+        }
+
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+
+        outFile << "\nDIJKSTRA" << std::endl;
+        outFile << "==========================" << std::endl;
+
+        if (hasNegativeWeights) {
+            outFile << "ERROR: Graph contains negative weights!" << std::endl;
+            outFile << "Dijkstra's algorithm does not support negative weights." << std::endl;
+            outFile << std::endl;
+            return;
+        }
+
+        outFile << "Source vertex: " << sourceVertex << std::endl;
+        outFile << std::endl;
+        outFile << "Vertex | Distance | Parent | Path" << std::endl;
+        outFile << "-------|----------|--------|------" << std::endl;
+
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            outFile << std::setw(6) << i << " | ";
+
+            if (distance[i] == std::numeric_limits<double>::infinity()) {
+                outFile << std::setw(8) << "inf" << " | ";
+                outFile << std::setw(6) << "-" << " | ";
+                outFile << "unreachable";
+            } else {
+                outFile << std::setw(8) << std::fixed << std::setprecision(2) << distance[i] << " | ";
+
+                if (this->parent[i] == -1) {
+                    outFile << std::setw(6) << "root" << " | ";
+                } else {
+                    outFile << std::setw(6) << this->parent[i] << " | ";
+                }
+
+                // Print path
+                std::vector<int> path = getShortestPath(i);
+                for (size_t j = 0; j < path.size(); j++) {
+                    outFile << path[j];
+                    if (j < path.size() - 1) outFile << " -> ";
+                }
+            }
+            outFile << std::endl;
+        }
+        outFile << std::endl;
+    }
+
+protected:
+    void reset() override {
+        GraphAlgorithm<GraphType>::reset();
+        std::fill(distance.begin(), distance.end(), std::numeric_limits<double>::infinity());
+    }
+};
+
+template<typename GraphType>
+class DijkstraVectorAlgorithm : public DijkstraAlgorithm<GraphType> {
+public:
+    DijkstraVectorAlgorithm(const GraphType* g) : DijkstraAlgorithm<GraphType>(g) {}
+
+    void execute(int startVertex) override {
+        if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid start vertex");
+        }
+
+        this->hasNegativeWeights = this->checkNegativeWeights();
+        if (this->hasNegativeWeights) {
+            return;
+        }
+
+        this->reset();
+        this->sourceVertex = startVertex;
+
+        this->distance[startVertex] = 0.0;
+        this->parent[startVertex] = -1;
+
+        // Vector to track which vertices have been processed
+        std::vector<bool> processed(this->graph->getNumVertices() + 1, false);
+
+        // Main Dijkstra loop
+        for (int count = 0; count < this->graph->getNumVertices(); count++) {
+            // Find vertex with minimum distance that hasn't been processed
+            int u = -1;
+            double minDist = std::numeric_limits<double>::infinity();
+
+            for (int v = 1; v <= this->graph->getNumVertices(); v++) {
+                if (!processed[v] && this->distance[v] < minDist) {
+                    minDist = this->distance[v];
+                    u = v;
+                }
+            }
+
+            // If no vertex found, all remaining vertices are unreachable
+            if (u == -1) break;
+
+            processed[u] = true;
+            this->visited[u] = true;
+
+            // Update distances to neighbors
+            auto neighbors = this->graph->getNeighborsWithWeights(u);
+            for (const auto& [v, weight] : neighbors) {
+                double newDist = this->distance[u] + weight;
+
+                if (newDist < this->distance[v]) {
+                    this->distance[v] = newDist;
+                    this->parent[v] = u;
+                }
+            }
+        }
+    }
+
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+
+        outFile << "IMPLEMENTATION: Vector-based (Array)" << std::endl;
+        DijkstraAlgorithm<GraphType>::printResults(outputFilename);
+    }
+};
+
+// Dijkstra with heap (priority queue-based implementation)
+template<typename GraphType>
+class DijkstraHeapAlgorithm : public DijkstraAlgorithm<GraphType> {
+private:
+    struct CompareDistance {
+        bool operator()(const std::pair<double, int>& a, const std::pair<double, int>& b) {
+            return a.first > b.first; // Min-heap: smaller distance has higher priority
+        }
+    };
+
+public:
+    DijkstraHeapAlgorithm(const GraphType* g) : DijkstraAlgorithm<GraphType>(g) {}
+
+    void execute(int startVertex) override {
+        if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid start vertex");
+        }
+
+        // Check for negative weights
+        this->hasNegativeWeights = this->checkNegativeWeights();
+        if (this->hasNegativeWeights) {
+            return; // Cannot proceed with Dijkstra
+        }
+
+        this->reset();
+        this->sourceVertex = startVertex;
+
+        // Priority queue: pair<distance, vertex>
+        std::priority_queue<std::pair<double, int>,
+                          std::vector<std::pair<double, int>>,
+                          CompareDistance> pq;
+
+        // Initialize source
+        this->distance[startVertex] = 0.0;
+        this->parent[startVertex] = -1;
+        pq.push({0.0, startVertex});
+
+        // Main Dijkstra loop with heap
+        while (!pq.empty()) {
+            double dist = pq.top().first;
+            int u = pq.top().second;
+            pq.pop();
+
+            // Aula 20.10.2025
+            // Se já processamos esse vértice com uma distância menor, ignoramos
+            // (isso acontece quando inserimos múltiplas entradas para o mesmo vértice)
+            if (dist > this->distance[u]) {
+                continue;
+            }
+
+            this->visited[u] = true;
+
+            // Update distances to neighbors
+            auto neighbors = this->graph->getNeighborsWithWeights(u);
+            for (const auto& [v, weight] : neighbors) {
+                double newDist = this->distance[u] + weight;
+
+                if (newDist < this->distance[v]) {
+                    this->distance[v] = newDist;
+                    this->parent[v] = u;
+
+                    // Aula 20.10.2025
+                    // Inserimos a nova distância no heap
+                    // A distância antiga eventualmente será processada mas será ignorada
+                    // pelo check acima (dist > this->distance[u])
+                    pq.push({newDist, v});
+                }
+            }
+        }
+    }
+
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+
+        outFile << "IMPLEMENTATION: Heap-based (Priority Queue)" << std::endl;
+        DijkstraAlgorithm<GraphType>::printResults(outputFilename);
+    }
+};
+
 // ============================================================================
 // FILE READER AND UTILITIES
 // ============================================================================
@@ -682,8 +991,9 @@ public:
         GraphType graph(numVertices);
 
         int u, v;
-        while (file >> u >> v) {
-            graph.addEdge(u, v);
+        float weight;
+        while (file >> u >> v >> weight) {
+            graph.addEdge(u, v, weight);
         }
 
         file.close();
@@ -885,6 +1195,22 @@ void findDfsParents(const GraphType& graph) {
 }
 
 template <typename GraphType>
+void runDijkstraVector(const GraphType& graph, int startVertex, const std::string& outputFilename) {
+    DijkstraVectorAlgorithm<GraphType> dijkstra(&graph);
+    dijkstra.execute(startVertex);
+    dijkstra.printResults(outputFilename);
+    std::cout << "Dijkstra (vector-based) results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
+void runDijkstraHeap(const GraphType& graph, int startVertex, const std::string& outputFilename) {
+    DijkstraHeapAlgorithm<GraphType> dijkstra(&graph);
+    dijkstra.execute(startVertex);
+    dijkstra.printResults(outputFilename);
+    std::cout << "Dijkstra (heap-based) results saved to: " << outputFilename << std::endl;
+}
+
+template <typename GraphType>
 void runFullAnalysis(const GraphType& graph, const std::string& outputFilename, int startVertex) {
     std::ofstream outFile(outputFilename);
 
@@ -971,6 +1297,8 @@ void printUsage(const char* programName) {
     std::cout << "  measureDfsDistances              - Measure distances between specific vertex pairs using DFS\n";
     std::cout << "  findBfsParents                   - Find parents of specific vertices using BFS. \n";
     std::cout << "  findDfsParents                   - Find parents of specific vertices using DFS. \n";
+    std::cout << "  dijkstraVector <startVertex>     - Run Dijkstra's algorithm (vector-based) from specified start vertex\n";
+    std::cout << "  dijkstraHeap <startVertex>       - Run Dijkstra's algorithm (heap-based) from specified start vertex\n";
     std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
     std::cout << "Options:\n";
     std::cout << "  --memory                         - Print memory usage information\n";
@@ -1077,6 +1405,24 @@ int main(int argc, char* argv[]) {
         }
         else if (operation == "findDfsParents") {
             std::visit([&](auto& g) { findDfsParents(g); }, graph);
+        }
+        else if (operation == "dijkstraVector") {
+            if (argc < 5) {
+                std::cerr << "Error: Dijkstra Vector requires a start vertex.\n";
+                return 1;
+            }
+            int startVertex = std::stoi(argv[4]);
+            std::string outputFilename = generateOutputFilename(filename, mode, "dijkstra_vector");
+            std::visit([&](auto& g) { runDijkstraVector(g, startVertex, outputFilename); }, graph);
+        }
+        else if (operation == "dijkstraHeap") {
+            if (argc < 5) {
+                std::cerr << "Error: Dijkstra Heap requires a start vertex.\n";
+                return 1;
+            }
+            int startVertex = std::stoi(argv[4]);
+            std::string outputFilename = generateOutputFilename(filename, mode, "dijkstra_heap");
+            std::visit([&](auto& g) { runDijkstraHeap(g, startVertex, outputFilename); }, graph);
         }
         else if (operation == "all") {
             if (argc < 5) {
