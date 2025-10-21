@@ -1211,6 +1211,98 @@ void runDijkstraHeap(const GraphType& graph, int startVertex, const std::string&
 }
 
 template <typename GraphType>
+void measureDijkstraDistancesHeap(const GraphType& graph) {
+    DijkstraHeapAlgorithm<GraphType> dijkstra(&graph);
+
+    int startVertex = 10;
+    std::vector<int> destinations = {20, 30, 40, 50, 60};
+
+    try {
+        dijkstra.execute(startVertex);
+
+        std::cout << "DIJKSTRA (HEAP-BASED) DISTANCES" << std::endl;
+        std::cout << "==================================" << std::endl;
+
+        for (int dest : destinations) {
+            double distance = dijkstra.getDistance(dest);
+
+            if (distance == std::numeric_limits<double>::infinity()) {
+                std::cout << "No path exists from " << startVertex << " to " << dest << std::endl;
+            } else {
+                std::cout << "Distance from " << startVertex << " to " << dest
+                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void measureDijkstraDistancesVector(const GraphType& graph) {
+    DijkstraVectorAlgorithm<GraphType> dijkstra(&graph);
+
+    int startVertex = 10;
+    std::vector<int> destinations = {20, 30, 40, 50, 60};
+
+    try {
+        dijkstra.execute(startVertex);
+
+        std::cout << "DIJKSTRA (VECTOR-BASED) DISTANCES" << std::endl;
+        std::cout << "==================================" << std::endl;
+
+        for (int dest : destinations) {
+            double distance = dijkstra.getDistance(dest);
+
+            if (distance == std::numeric_limits<double>::infinity()) {
+                std::cout << "No path exists from " << startVertex << " to " << dest << std::endl;
+            } else {
+                std::cout << "Distance from " << startVertex << " to " << dest
+                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void runMultipleDijkstraVector(const GraphType& graph, int numTests = 100) {
+    DijkstraVectorAlgorithm<GraphType> dijkstra(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, graph.getNumVertices());
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto start = std::chrono::high_resolution_clock::now();
+        dijkstra.execute(startVertex);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << elapsed.count() << "\n";
+    }
+}
+
+template <typename GraphType>
+void runMultipleDijkstraHeap(const GraphType& graph, int numTests = 100) {
+    DijkstraHeapAlgorithm<GraphType> dijkstra(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, graph.getNumVertices());
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto start = std::chrono::high_resolution_clock::now();
+        dijkstra.execute(startVertex);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << elapsed.count() << "\n";
+    }
+}
+
+template <typename GraphType>
 void runFullAnalysis(const GraphType& graph, const std::string& outputFilename, int startVertex) {
     std::ofstream outFile(outputFilename);
 
@@ -1299,6 +1391,10 @@ void printUsage(const char* programName) {
     std::cout << "  findDfsParents                   - Find parents of specific vertices using DFS. \n";
     std::cout << "  dijkstraVector <startVertex>     - Run Dijkstra's algorithm (vector-based) from specified start vertex\n";
     std::cout << "  dijkstraHeap <startVertex>       - Run Dijkstra's algorithm (heap-based) from specified start vertex\n";
+    std::cout << "  measureDijkstraDistancesHeap     - Measure distances from vertex 10 to specific vertices using Dijkstra (heap-based)\n";
+    std::cout << "  measureDijkstraDistancesVector   - Measure distances from vertex 10 to specific vertices using Dijkstra (vector-based)\n";
+    std::cout << "  multipleDijkstraVector <numTests>- Run Dijkstra (vector-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  multipleDijkstraHeap <numTests>  - Run Dijkstra (heap-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
     std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
     std::cout << "Options:\n";
     std::cout << "  --memory                         - Print memory usage information\n";
@@ -1423,6 +1519,20 @@ int main(int argc, char* argv[]) {
             int startVertex = std::stoi(argv[4]);
             std::string outputFilename = generateOutputFilename(filename, mode, "dijkstra_heap");
             std::visit([&](auto& g) { runDijkstraHeap(g, startVertex, outputFilename); }, graph);
+        }
+        else if (operation == "measureDijkstraDistancesHeap") {
+            std::visit([&](auto& g) { measureDijkstraDistancesHeap(g); }, graph);
+        }
+        else if (operation == "measureDijkstraDistancesVector") {
+            std::visit([&](auto& g) { measureDijkstraDistancesVector(g); }, graph);
+        }
+        else if (operation == "multipleDijkstraVector") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleDijkstraVector(g, numTests); }, graph);
+        }
+        else if (operation == "multipleDijkstraHeap") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
+            std::visit([&](auto& g) { runMultipleDijkstraHeap(g, numTests); }, graph);
         }
         else if (operation == "all") {
             if (argc < 5) {
