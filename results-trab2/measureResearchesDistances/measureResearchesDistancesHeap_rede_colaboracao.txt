@@ -1,5 +1,4 @@
 Loaded 722385 researchers from ./exemplos/rede_colaboracao_vertices.txt
-Researcher not found: Eva Tardos
 DIJKSTRA (HEAP-BASED) DISTANCES AND PATHS
 ==========================================
 Source vertex: Edsger W. Dijkstra
@@ -10,6 +9,9 @@ Path: Edsger W. Dijkstra -> John R. Rice -> Dan C. Marinescu -> Howard Jay Siege
 
 Distance from Edsger W. Dijkstra to Jon M. Kleinberg is 2.71
 Path: Edsger W. Dijkstra -> A. J. M. van Gasteren -> Gerard Tel -> Hans L. Bodlaender -> Dimitrios M. Thilikos -> Prabhakar Ragde -> Avi Wigderson -> Eli Upfal -> Prabhakar Raghavan -> Jon M. Kleinberg
+
+Distance from Edsger W. Dijkstra to Éva Tardos is 2.75
+Path: Edsger W. Dijkstra -> A. J. M. van Gasteren -> Gerard Tel -> Hans L. Bodlaender -> Jan van Leeuwen -> Mark H. Overmars -> Micha Sharir -> Haim Kaplan -> Robert Endre Tarjan -> Andrew V. Goldberg -> Serge A. Plotkin -> Éva Tardos
 
 Distance from Edsger W. Dijkstra to Daniel R. Figueiredo is 2.94
 Path: Edsger W. Dijkstra -> John R. Rice -> Dan C. Marinescu -> Chuang Lin -> Bo Li -> Y. Thomas Hou -> Zhi-Li Zhang -> Donald F. Towsley -> Daniel R. Figueiredo

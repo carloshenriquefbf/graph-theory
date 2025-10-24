@@ -1380,7 +1380,7 @@ void measureResearchesDistancesVector(const GraphType& graph, const ResearcherMa
         "Alan M. Turing",
         "J. B. Kruskal",
         "Jon M. Kleinberg",
-        "Eva Tardos",
+        "Éva Tardos",
         "Daniel R. Figueiredo"
     };
 
@@ -1436,7 +1436,7 @@ void measureResearchesDistancesHeap(const GraphType& graph, const ResearcherMapp
         "Alan M. Turing",
         "J. B. Kruskal",
         "Jon M. Kleinberg",
-        "Eva Tardos",
+        "Éva Tardos",
         "Daniel R. Figueiredo"
     };
 
