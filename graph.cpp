@@ -730,7 +730,7 @@ public:
 
     double getDistance(int vertex) const {
         if (vertex < 1 || vertex > this->graph->getNumVertices()) {
-            throw std::invalid_argument("Invalid vertex");
+            throw std::invalid_argument("Invalid vertex: " + std::to_string(vertex));
         }
         return distance[vertex];
     }
@@ -962,6 +962,55 @@ public:
 
         outFile << "IMPLEMENTATION: Heap-based (Priority Queue)" << std::endl;
         DijkstraAlgorithm<GraphType>::printResults(outputFilename);
+    }
+};
+
+class ResearcherMapper {
+private:
+    std::map<int, std::string> idToName;
+    std::map<std::string, int> nameToId;
+
+public:
+    void loadFromFile(const std::string& filename) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            throw std::runtime_error("Cannot open researcher file: " + filename);
+        }
+
+        std::string line;
+        while (std::getline(file, line)) {
+
+            size_t commaPos = line.find(',');
+
+            int id = std::stoi(line.substr(0, commaPos));
+            std::string name = line.substr(commaPos + 1);
+
+            idToName[id] = name;
+            nameToId[name] = id;
+        }
+
+        file.close();
+        std::cout << "Loaded " << idToName.size() << " researchers from " << filename << std::endl;
+    }
+
+    int getIdByName(const std::string& name) const {
+        auto it = nameToId.find(name);
+        if (it != nameToId.end()) {
+            return it->second;
+        }
+        return -1;
+    }
+
+    std::string getNameById(int id) const {
+        auto it = idToName.find(id);
+        if (it != idToName.end()) {
+            return it->second;
+        }
+        return "-";
+    }
+
+    bool hasResearcher(const std::string& name) const {
+        return nameToId.find(name) != nameToId.end();
     }
 };
 
@@ -1220,8 +1269,10 @@ void measureDijkstraDistancesHeap(const GraphType& graph) {
     try {
         dijkstra.execute(startVertex);
 
-        std::cout << "DIJKSTRA (HEAP-BASED) DISTANCES" << std::endl;
-        std::cout << "==================================" << std::endl;
+        std::cout << "DIJKSTRA (HEAP-BASED) DISTANCES AND PATHS" << std::endl;
+        std::cout << "==========================================" << std::endl;
+        std::cout << "Source vertex: " << startVertex << std::endl;
+        std::cout << std::endl;
 
         for (int dest : destinations) {
             double distance = dijkstra.getDistance(dest);
@@ -1231,6 +1282,14 @@ void measureDijkstraDistancesHeap(const GraphType& graph) {
             } else {
                 std::cout << "Distance from " << startVertex << " to " << dest
                          << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+
+                std::vector<int> path = dijkstra.getShortestPath(dest);
+                std::cout << "Path: ";
+                for (size_t i = 0; i < path.size(); i++) {
+                    std::cout << path[i];
+                    if (i < path.size() - 1) std::cout << " -> ";
+                }
+                std::cout << std::endl << std::endl;
             }
         }
     } catch (const std::exception& e) {
@@ -1248,8 +1307,10 @@ void measureDijkstraDistancesVector(const GraphType& graph) {
     try {
         dijkstra.execute(startVertex);
 
-        std::cout << "DIJKSTRA (VECTOR-BASED) DISTANCES" << std::endl;
-        std::cout << "==================================" << std::endl;
+        std::cout << "DIJKSTRA (VECTOR-BASED) DISTANCES AND PATHS" << std::endl;
+        std::cout << "============================================" << std::endl;
+        std::cout << "Source vertex: " << startVertex << std::endl;
+        std::cout << std::endl;
 
         for (int dest : destinations) {
             double distance = dijkstra.getDistance(dest);
@@ -1259,6 +1320,14 @@ void measureDijkstraDistancesVector(const GraphType& graph) {
             } else {
                 std::cout << "Distance from " << startVertex << " to " << dest
                          << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+
+                std::vector<int> path = dijkstra.getShortestPath(dest);
+                std::cout << "Path: ";
+                for (size_t i = 0; i < path.size(); i++) {
+                    std::cout << path[i];
+                    if (i < path.size() - 1) std::cout << " -> ";
+                }
+                std::cout << std::endl << std::endl;
             }
         }
     } catch (const std::exception& e) {
@@ -1299,6 +1368,118 @@ void runMultipleDijkstraHeap(const GraphType& graph, int numTests = 100) {
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout << elapsed.count() << "\n";
+    }
+}
+
+template <typename GraphType>
+void measureResearchesDistancesVector(const GraphType& graph, const ResearcherMapper& researcherMapper) {
+    DijkstraVectorAlgorithm<GraphType> dijkstra(&graph);
+
+    std::string startVertex = "Edsger W. Dijkstra";
+    std::vector<std::string> targetResearchers = {
+        "Alan M. Turing",
+        "J. B. Kruskal",
+        "Jon M. Kleinberg",
+        "Eva Tardos",
+        "Daniel R. Figueiredo"
+    };
+
+    try {
+        int startVertexId = researcherMapper.getIdByName(startVertex);
+        std::vector<int> destinations;
+        for (const auto& name : targetResearchers) {
+            int id = researcherMapper.getIdByName(name);
+            if (id == -1) {
+                std::cout << "Researcher not found: " << name << std::endl;
+            }
+            else {
+                destinations.push_back(id);
+            }
+        }
+
+        dijkstra.execute(startVertexId);
+
+        std::cout << "DIJKSTRA (VECTOR-BASED) DISTANCES AND PATHS" << std::endl;
+        std::cout << "============================================" << std::endl;
+        std::cout << "Source vertex: " << startVertex << std::endl;
+        std::cout << std::endl;
+
+        for (int dest : destinations) {
+            double distance = dijkstra.getDistance(dest);
+
+            if (distance == std::numeric_limits<double>::infinity()) {
+                std::cout << "No path exists from " << startVertex << " to " << researcherMapper.getNameById(dest) << std::endl;
+            } else {
+                std::cout << "Distance from " << startVertex << " to " << researcherMapper.getNameById(dest)
+                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+
+                std::vector<int> path = dijkstra.getShortestPath(dest);
+                std::cout << "Path: ";
+                for (size_t i = 0; i < path.size(); i++) {
+                    std::cout << researcherMapper.getNameById(path[i]);
+                    if (i < path.size() - 1) std::cout << " -> ";
+                }
+                std::cout << std::endl << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
+    }
+}
+
+template <typename GraphType>
+void measureResearchesDistancesHeap(const GraphType& graph, const ResearcherMapper& researcherMapper) {
+    DijkstraHeapAlgorithm<GraphType> dijkstra(&graph);
+
+    std::string startVertex = "Edsger W. Dijkstra";
+    std::vector<std::string> targetResearchers = {
+        "Alan M. Turing",
+        "J. B. Kruskal",
+        "Jon M. Kleinberg",
+        "Eva Tardos",
+        "Daniel R. Figueiredo"
+    };
+
+    try {
+        int startVertexId = researcherMapper.getIdByName(startVertex);
+        std::vector<int> destinations;
+        for (const auto& name : targetResearchers) {
+            int id = researcherMapper.getIdByName(name);
+            if (id == -1) {
+                std::cout << "Researcher not found: " << name << std::endl;
+            }
+            else {
+                destinations.push_back(id);
+            }
+        }
+
+        dijkstra.execute(startVertexId);
+
+        std::cout << "DIJKSTRA (HEAP-BASED) DISTANCES AND PATHS" << std::endl;
+        std::cout << "==========================================" << std::endl;
+        std::cout << "Source vertex: " << startVertex << std::endl;
+        std::cout << std::endl;
+
+        for (int dest : destinations) {
+            double distance = dijkstra.getDistance(dest);
+
+            if (distance == std::numeric_limits<double>::infinity()) {
+                std::cout << "No path exists from " << startVertex << " to " << researcherMapper.getNameById(dest) << std::endl;
+            } else {
+                std::cout << "Distance from " << startVertex << " to " << researcherMapper.getNameById(dest)
+                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+
+                std::vector<int> path = dijkstra.getShortestPath(dest);
+                std::cout << "Path: ";
+                for (size_t i = 0; i < path.size(); i++) {
+                    std::cout << researcherMapper.getNameById(path[i]);
+                    if (i < path.size() - 1) std::cout << " -> ";
+                }
+                std::cout << std::endl << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cout << " [error: " << e.what() << "]" << std::flush;
     }
 }
 
@@ -1374,31 +1555,33 @@ size_t getMemoryUsageBytes() {
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <filename> <mode> <operation> [options]\n\n";
     std::cout << "Mode:\n";
-    std::cout << "  adjacencyMatrix                  - Use adjacency matrix representation\n";
-    std::cout << "  adjacencyList                    - Use adjacency list representation\n\n";
+    std::cout << "  adjacencyMatrix                                         - Use adjacency matrix representation\n";
+    std::cout << "  adjacencyList                                           - Use adjacency list representation\n\n";
     std::cout << "Operations:\n";
-    std::cout << "  stats                            - Generate graph statistics only\n";
-    std::cout << "  bfs <startVertex>                - Run BFS from specified start vertex\n";
-    std::cout << "  dfs <startVertex>                - Run DFS from specified start vertex\n";
-    std::cout << "  multipleBfs <numTests>           - Run BFS multiple times for performance testing. <numTests> is optional (default 100)\n";
-    std::cout << "  multipleDfs <numTests>           - Run DFS multiple times for performance testing. <numTests> is optional (default 100)\n";
-    std::cout << "  diameter                         - Calculate graph diameter\n";
-    std::cout << "  approximateDiameter <sampleSize> - Calculate approximate graph diameter (for large graphs. <sampleSize> is optional, default 100)\n";
-    std::cout << "  components                       - Find connected components\n";
-    std::cout << "  measureBfsDistances              - Measure distances between specific vertex pairs using BFS\n";
-    std::cout << "  measureDfsDistances              - Measure distances between specific vertex pairs using DFS\n";
-    std::cout << "  findBfsParents                   - Find parents of specific vertices using BFS. \n";
-    std::cout << "  findDfsParents                   - Find parents of specific vertices using DFS. \n";
-    std::cout << "  dijkstraVector <startVertex>     - Run Dijkstra's algorithm (vector-based) from specified start vertex\n";
-    std::cout << "  dijkstraHeap <startVertex>       - Run Dijkstra's algorithm (heap-based) from specified start vertex\n";
-    std::cout << "  measureDijkstraDistancesHeap     - Measure distances from vertex 10 to specific vertices using Dijkstra (heap-based)\n";
-    std::cout << "  measureDijkstraDistancesVector   - Measure distances from vertex 10 to specific vertices using Dijkstra (vector-based)\n";
-    std::cout << "  multipleDijkstraVector <numTests>- Run Dijkstra (vector-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
-    std::cout << "  multipleDijkstraHeap <numTests>  - Run Dijkstra (heap-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
-    std::cout << "  all <startVertex>                - Run all algorithms (full analysis)\n\n";
+    std::cout << "  stats                                                   - Generate graph statistics only\n";
+    std::cout << "  bfs <startVertex>                                       - Run BFS from specified start vertex\n";
+    std::cout << "  dfs <startVertex>                                       - Run DFS from specified start vertex\n";
+    std::cout << "  multipleBfs <numTests>                                  - Run BFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  multipleDfs <numTests>                                  - Run DFS multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  diameter                                                - Calculate graph diameter\n";
+    std::cout << "  approximateDiameter <sampleSize>                        - Calculate approximate graph diameter (for large graphs. <sampleSize> is optional, default 100)\n";
+    std::cout << "  components                                              - Find connected components\n";
+    std::cout << "  measureBfsDistances                                     - Measure distances between specific vertex pairs using BFS\n";
+    std::cout << "  measureDfsDistances                                     - Measure distances between specific vertex pairs using DFS\n";
+    std::cout << "  findBfsParents                                          - Find parents of specific vertices using BFS. \n";
+    std::cout << "  findDfsParents                                          - Find parents of specific vertices using DFS. \n";
+    std::cout << "  dijkstraVector <startVertex>                            - Run Dijkstra's algorithm (vector-based) from specified start vertex\n";
+    std::cout << "  dijkstraHeap <startVertex>                              - Run Dijkstra's algorithm (heap-based) from specified start vertex\n";
+    std::cout << "  measureDijkstraDistancesHeap                            - Measure distances from vertex 10 to specific vertices using Dijkstra (heap-based)\n";
+    std::cout << "  measureDijkstraDistancesVector                          - Measure distances from vertex 10 to specific vertices using Dijkstra (vector-based)\n";
+    std::cout << "  multipleDijkstraVector <numTests>                       - Run Dijkstra (vector-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  multipleDijkstraHeap <numTests>                         - Run Dijkstra (heap-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  measureResearchesDistancesVector <researchesFilePath>   - Measure distances between specific researchers mapped from <researchesFilePath> using Dijkstra (vector-based)\n";
+    std::cout << "  measureResearchesDistancesHeap  <researchesFilePath>    - Measure distances between specific researchers mapped from <researchesFilePath> using Dijkstra (heap-based)\n";
+    std::cout << "  all <startVertex>                                       - Run all algorithms (full analysis)\n\n";
     std::cout << "Options:\n";
-    std::cout << "  --memory                         - Print memory usage information\n";
-    std::cout << "  --timing                         - Print graph loading time\n\n";
+    std::cout << "  --memory                                                - Print memory usage information\n";
+    std::cout << "  --timing                                                - Print graph loading time\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " graph.txt adjacencyList stats\n";
     std::cout << "  " << programName << " graph.txt adjacencyMatrix bfs 1\n";
@@ -1533,6 +1716,26 @@ int main(int argc, char* argv[]) {
         else if (operation == "multipleDijkstraHeap") {
             int numTests = (argc > 4) ? std::stoi(argv[4]) : 100;
             std::visit([&](auto& g) { runMultipleDijkstraHeap(g, numTests); }, graph);
+        }
+        else if (operation == "measureResearchesDistancesVector") {
+            ResearcherMapper researcherMapper;
+            if (argc < 5) {
+                std::cerr << "Error: Researches file path required.\n";
+                return 1;
+            }
+            std::string researchesFilePath = argv[4];
+            researcherMapper.loadFromFile(researchesFilePath);
+            std::visit([&](auto& g) { measureResearchesDistancesVector(g, researcherMapper); }, graph);
+        }
+        else if (operation == "measureResearchesDistancesHeap") {
+            ResearcherMapper researcherMapper;
+            if (argc < 5) {
+                std::cerr << "Error: Researches file path required.\n";
+                return 1;
+            }
+            std::string researchesFilePath = argv[4];
+            researcherMapper.loadFromFile(researchesFilePath);
+            std::visit([&](auto& g) { measureResearchesDistancesHeap(g, researcherMapper); }, graph);
         }
         else if (operation == "all") {
             if (argc < 5) {
