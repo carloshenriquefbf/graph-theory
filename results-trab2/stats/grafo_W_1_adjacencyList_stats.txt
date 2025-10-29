@@ -1,0 +1,18 @@
+GRAPH STATISTICS
+================
+Number of vertices: 10000
+Number of edges: 209957
+
+DEGREE STATISTICS
+-----------------
+Minimum degree: 20
+Maximum degree: 68
+Average degree: 41.99
+Median degree: 42.00
+
+WEIGHT STATISTICS
+-----------------
+Minimum weight: 0.00
+Maximum weight: 10.00
+Average weight: 4.88
+Median weight: 4.77
