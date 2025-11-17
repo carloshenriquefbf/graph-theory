@@ -1,0 +1,23 @@
+DIJKSTRA (HEAP-BASED) DISTANCES AND PATHS
+==========================================
+Source vertex: 100
+
+Execution time: 0.900067 seconds
+
+Source 100 -> Destination 10
+Distance: 4.63
+Path: 100 -> 74552 -> 70398 -> 48833 -> 43785 -> 31488 -> 9370 -> 2858 -> 10
+
+Source 100 -> Destination 20
+Distance: 5.42
+Path: 100 -> 74552 -> 36899 -> 20244 -> 15939 -> 13021 -> 8495 -> 2526 -> 20
+
+Source 100 -> Destination 30
+Distance: 4.67
+Path: 100 -> 74552 -> 74494 -> 35741 -> 43482 -> 43059 -> 29698 -> 30
+
+==========================================
+TIMING SUMMARY
+==========================================
+TOTAL EXECUTION TIME: 0.90 seconds
+==========================================

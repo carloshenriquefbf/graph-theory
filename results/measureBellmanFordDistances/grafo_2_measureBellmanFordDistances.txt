@@ -1,0 +1,28 @@
+BELLMAN-FORD DISTANCES AND PATHS
+=================================
+Destination vertex: 100
+
+Source 10 -> Destination 100
+Execution time: 0.447308 seconds
+Distance: 10.47
+Path: 10 -> 22754 -> 23713 -> 20821 -> 23161 -> 3591 -> 7214 -> 4808 -> 7704 -> 10831 -> 14144 -> 100
+
+Source 20 -> Destination 100
+Execution time: 0.43 seconds
+Distance: 8.48
+Path: 20 -> 6795 -> 7737 -> 11988 -> 7094 -> 14144 -> 100
+
+Source 30 -> Destination 100
+Execution time: 0.43 seconds
+Distance: 8.71
+Path: 30 -> 23783 -> 439 -> 502 -> 7344 -> 7842 -> 10419 -> 12598 -> 13685 -> 17695 -> 14144 -> 100
+
+==========================================
+TIMING SUMMARY
+==========================================
+Source 10 -> 100: 0.45 seconds
+Source 20 -> 100: 0.43 seconds
+Source 30 -> 100: 0.43 seconds
+------------------------------------------
+TOTAL EXECUTION TIME: 1.31 seconds
+==========================================
