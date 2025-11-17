@@ -26,15 +26,39 @@ class AdjacencyListGraph {
 private:
     int numVertices;
     std::vector<std::map<int, double>> adjacencyList;
+    bool isDirected;
+    double minWeight;
+    double maxWeight;
 
 public:
-    AdjacencyListGraph(int vertices = 0) : numVertices(vertices) {
+    AdjacencyListGraph(int vertices = 0, bool directed = false)
+        : numVertices(vertices), isDirected(directed),
+          minWeight(std::numeric_limits<double>::infinity()),
+          maxWeight(-std::numeric_limits<double>::infinity()) {
         adjacencyList.resize(vertices + 1);
     }
 
     void addEdge(int u, int v, double weight) {
         adjacencyList[u][v] = weight;
-        adjacencyList[v][u] = weight;
+        if (!isDirected) {
+            adjacencyList[v][u] = weight;
+        }
+
+        // Update min and max weights
+        if (weight < minWeight) {
+            minWeight = weight;
+        }
+        if (weight > maxWeight) {
+            maxWeight = weight;
+        }
+    }
+
+    double getMinWeight() const {
+        return minWeight;
+    }
+
+    double getMaxWeight() const {
+        return maxWeight;
     }
 
     int getNumVertices() const {
@@ -46,7 +70,11 @@ public:
         for (int i = 1; i <= numVertices; i++) {
             edges += adjacencyList[i].size();
         }
-        return edges / 2;
+        return isDirected ? edges : edges / 2;
+    }
+
+    bool getIsDirected() const {
+        return isDirected;
     }
 
     int getDegree(int vertex) const {
@@ -145,16 +173,40 @@ class AdjacencyMatrixGraph {
 private:
     int numVertices;
     std::vector<std::vector<double>> adjacencyMatrix;
+    bool isDirected;
+    double minWeight;
+    double maxWeight;
     static constexpr double NO_EDGE = std::numeric_limits<double>::infinity();
 
 public:
-    AdjacencyMatrixGraph(int vertices = 0) : numVertices(vertices) {
+    AdjacencyMatrixGraph(int vertices = 0, bool directed = false)
+        : numVertices(vertices), isDirected(directed),
+          minWeight(std::numeric_limits<double>::infinity()),
+          maxWeight(-std::numeric_limits<double>::infinity()) {
         adjacencyMatrix.resize(vertices + 1, std::vector<double>(vertices + 1, NO_EDGE));
     }
 
     void addEdge(int u, int v, double weight) {
         adjacencyMatrix[u][v] = weight;
-        adjacencyMatrix[v][u] = weight;
+        if (!isDirected) {
+            adjacencyMatrix[v][u] = weight;
+        }
+
+        // Update min and max weights
+        if (weight < minWeight) {
+            minWeight = weight;
+        }
+        if (weight > maxWeight) {
+            maxWeight = weight;
+        }
+    }
+
+    double getMinWeight() const {
+        return minWeight;
+    }
+
+    double getMaxWeight() const {
+        return maxWeight;
     }
 
     int getNumVertices() const {
@@ -164,13 +216,17 @@ public:
     int getNumEdges() const {
         int edges = 0;
         for (int i = 1; i <= numVertices; i++) {
-            for (int j = i + 1; j <= numVertices; j++) {
+            for (int j = 1; j <= numVertices; j++) {
                 if (adjacencyMatrix[i][j] != NO_EDGE) {
                     edges++;
                 }
             }
         }
-        return edges;
+        return isDirected ? edges : edges / 2;
+    }
+
+    bool getIsDirected() const {
+        return isDirected;
     }
 
     int getDegree(int vertex) const {
@@ -268,6 +324,8 @@ public:
         return adjacencyMatrix[u][v] != NO_EDGE;
     }
 };
+
+
 
 // ============================================================================
 // GRAPH ALGORITHMS
@@ -1014,6 +1072,180 @@ public:
     }
 };
 
+// Bellman-Ford algorithm for graphs with negative weights
+template<typename GraphType>
+class BellmanFordAlgorithm : public GraphAlgorithm<GraphType> {
+protected:
+    std::vector<double> distance;
+    bool hasNegativeCycle;
+    int sourceVertex;
+
+public:
+    BellmanFordAlgorithm(const GraphType* g) : GraphAlgorithm<GraphType>(g), sourceVertex(-1) {
+        if (!g->getIsDirected()) {
+            throw std::runtime_error("Error: Bellman-Ford algorithm requires directed graphs.");
+        }
+        if (g) {
+            distance.resize(g->getNumVertices() + 1, std::numeric_limits<double>::infinity());
+        }
+        hasNegativeCycle = false;
+    }
+
+    void execute(int startVertex) override {
+        if (startVertex < 1 || startVertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid start vertex");
+        }
+
+        this->reset();
+        this->sourceVertex = startVertex;
+        hasNegativeCycle = false;
+
+        // Initialize source
+        distance[startVertex] = 0.0;
+        this->parent[startVertex] = -1;
+        this->visited[startVertex] = true;
+
+        // Relax edges |V| - 1 times
+        for (int i = 1; i < this->graph->getNumVertices(); i++) {
+            bool updated = false;
+
+            for (int u = 1; u <= this->graph->getNumVertices(); u++) {
+                if (distance[u] == std::numeric_limits<double>::infinity()) {
+                    continue;
+                }
+
+                auto neighbors = this->graph->getNeighborsWithWeights(u);
+                for (const auto& [v, weight] : neighbors) {
+                    double newDist = distance[u] + weight;
+
+                    if (newDist < distance[v]) {
+                        distance[v] = newDist;
+                        this->parent[v] = u;
+                        this->visited[v] = true;
+                        updated = true;
+                    }
+                }
+            }
+
+            // Early termination if no updates
+            if (!updated) {
+                break;
+            }
+        }
+
+        // Check for negative cycles
+        for (int u = 1; u <= this->graph->getNumVertices(); u++) {
+            if (distance[u] == std::numeric_limits<double>::infinity()) {
+                continue;
+            }
+
+            auto neighbors = this->graph->getNeighborsWithWeights(u);
+            for (const auto& [v, weight] : neighbors) {
+                if (distance[u] + weight < distance[v]) {
+                    hasNegativeCycle = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    double getDistance(int vertex) const {
+        if (vertex < 1 || vertex > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid vertex: " + std::to_string(vertex));
+        }
+        return distance[vertex];
+    }
+
+    std::vector<double> getAllDistances() const {
+        return distance;
+    }
+
+    bool hasNegativeCycleDetected() const {
+        return hasNegativeCycle;
+    }
+
+    std::vector<int> getShortestPath(int destination) const {
+        if (destination < 1 || destination > this->graph->getNumVertices()) {
+            throw std::invalid_argument("Invalid destination vertex");
+        }
+
+        if (hasNegativeCycle) {
+            return {}; // No valid path if negative cycle exists
+        }
+
+        if (distance[destination] == std::numeric_limits<double>::infinity()) {
+            return {}; // No path exists
+        }
+
+        std::vector<int> path;
+        int current = destination;
+
+        while (current != -1) {
+            path.push_back(current);
+            current = this->parent[current];
+        }
+
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+    void printResults(const std::string& outputFilename) override {
+        std::ofstream outFile(outputFilename, std::ios::app);
+        if (!outFile.is_open()) {
+            throw std::runtime_error("Cannot open file: " + outputFilename);
+        }
+
+        outFile << "\nBELLMAN-FORD ALGORITHM" << std::endl;
+        outFile << "======================" << std::endl;
+
+        if (hasNegativeCycle) {
+            outFile << "ERROR: Graph contains a negative cycle!" << std::endl;
+            outFile << "Shortest paths are not well-defined." << std::endl;
+            outFile << std::endl;
+            return;
+        }
+
+        outFile << "Source vertex: " << sourceVertex << std::endl;
+        outFile << std::endl;
+        outFile << "Vertex | Distance | Parent | Path" << std::endl;
+        outFile << "-------|----------|--------|------" << std::endl;
+
+        for (int i = 1; i <= this->graph->getNumVertices(); i++) {
+            outFile << std::setw(6) << i << " | ";
+
+            if (distance[i] == std::numeric_limits<double>::infinity()) {
+                outFile << std::setw(8) << "inf" << " | ";
+                outFile << std::setw(6) << "-" << " | ";
+                outFile << "unreachable";
+            } else {
+                outFile << std::setw(8) << std::fixed << std::setprecision(2) << distance[i] << " | ";
+
+                if (this->parent[i] == -1) {
+                    outFile << std::setw(6) << "root" << " | ";
+                } else {
+                    outFile << std::setw(6) << this->parent[i] << " | ";
+                }
+
+                // Print path
+                std::vector<int> path = getShortestPath(i);
+                for (size_t j = 0; j < path.size(); j++) {
+                    outFile << path[j];
+                    if (j < path.size() - 1) outFile << " -> ";
+                }
+            }
+            outFile << std::endl;
+        }
+        outFile << std::endl;
+    }
+
+protected:
+    void reset() override {
+        GraphAlgorithm<GraphType>::reset();
+        std::fill(distance.begin(), distance.end(), std::numeric_limits<double>::infinity());
+        hasNegativeCycle = false;
+    }
+};
+
 // ============================================================================
 // FILE READER AND UTILITIES
 // ============================================================================
@@ -1021,7 +1253,7 @@ public:
 class GraphFileReader {
 public:
     template <typename GraphType>
-    static GraphType readFromFile(const std::string& filename) {
+    static GraphType readFromFile(const std::string& filename, bool isDirected = false) {
         std::ifstream file(filename);
 
         if (!file.is_open()) {
@@ -1037,7 +1269,7 @@ public:
             throw std::invalid_argument("Number of vertices must be positive");
         }
 
-        GraphType graph(numVertices);
+        GraphType graph(numVertices, isDirected);
 
         int u, v;
         float weight;
@@ -1062,12 +1294,15 @@ void generateGraphStatistics(const GraphType& graph, const std::string& outputFi
 
     outFile << "GRAPH STATISTICS" << std::endl;
     outFile << "================" << std::endl;
+    outFile << "Graph type: " << (graph.getIsDirected() ? "Directed" : "Undirected") << std::endl;
     outFile << "Number of vertices: " << graph.getNumVertices() << std::endl;
     outFile << "Number of edges: " << graph.getNumEdges() << std::endl;
     outFile << "Minimum degree: " << graph.getMinDegree() << std::endl;
     outFile << "Maximum degree: " << graph.getMaxDegree() << std::endl;
     outFile << "Average degree: " << graph.getAverageDegree() << std::endl;
     outFile << "Median degree: " << graph.getMedianDegree() << std::endl;
+    outFile << "Minimum weight: " << graph.getMinWeight() << std::endl;
+    outFile << "Maximum weight: " << graph.getMaxWeight() << std::endl;
 
     outFile.close();
     std::cout << "Graph statistics saved to: " << outputFilename << std::endl;
@@ -1484,6 +1719,74 @@ void measureResearchesDistancesHeap(const GraphType& graph, const ResearcherMapp
 }
 
 template <typename GraphType>
+void runMultipleBellmanFord(const GraphType& graph, int numTests = 10) {
+    BellmanFordAlgorithm<GraphType> bellmanFord(&graph);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> dis(1, graph.getNumVertices());
+
+    for (int i = 0; i < numTests; i++) {
+        int startVertex = dis(gen);
+        auto start = std::chrono::high_resolution_clock::now();
+        bellmanFord.execute(startVertex);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << elapsed.count() << "\n";
+    }
+}
+
+template <typename GraphType>
+void measureBellmanFordDistances(const GraphType& graph) {
+    BellmanFordAlgorithm<GraphType> bellmanFord(&graph);
+
+    std::vector<int> sources = {10, 20, 30};
+    int destination = 100;
+
+    std::cout << "BELLMAN-FORD DISTANCES AND PATHS" << std::endl;
+    std::cout << "=================================" << std::endl;
+    std::cout << "Destination vertex: " << destination << std::endl;
+    std::cout << std::endl;
+
+    for (int source : sources) {
+        try {
+            auto start = std::chrono::high_resolution_clock::now();
+            bellmanFord.execute(source);
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed = end - start;
+            std::cout << "Execution time from source " << source << ": " << elapsed.count() << " seconds" << std::endl;
+
+            if (bellmanFord.hasNegativeCycleDetected()) {
+                std::cout << "Source " << source << ": ERROR - Graph contains a negative cycle!" << std::endl;
+                std::cout << std::endl;
+                continue;
+            }
+
+            double distance = bellmanFord.getDistance(destination);
+
+            if (distance == std::numeric_limits<double>::infinity()) {
+                std::cout << "Source " << source << ": No path exists to vertex " << destination << std::endl;
+            } else {
+                std::cout << "Source " << source << ": Distance to " << destination
+                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+
+                std::vector<int> path = bellmanFord.getShortestPath(destination);
+                std::cout << "Path: ";
+                for (size_t i = 0; i < path.size(); i++) {
+                    std::cout << path[i];
+                    if (i < path.size() - 1) std::cout << " -> ";
+                }
+                std::cout << std::endl;
+            }
+            std::cout << std::endl;
+        } catch (const std::exception& e) {
+            std::cout << "Source " << source << ": [error: " << e.what() << "]" << std::endl;
+            std::cout << std::endl;
+        }
+    }
+}
+
+template <typename GraphType>
 void runFullAnalysis(const GraphType& graph, const std::string& outputFilename, int startVertex) {
     std::ofstream outFile(outputFilename);
 
@@ -1555,8 +1858,9 @@ size_t getMemoryUsageBytes() {
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <filename> <mode> <operation> [options]\n\n";
     std::cout << "Mode:\n";
-    std::cout << "  adjacencyMatrix                                         - Use adjacency matrix representation\n";
-    std::cout << "  adjacencyList                                           - Use adjacency list representation\n\n";
+    std::cout << "  adjacencyMatrix                                         - Use adjacency matrix representation (undirected)\n";
+    std::cout << "  adjacencyList                                           - Use adjacency list representation (undirected)\n";
+    std::cout << "  directedAdjacencyList                                   - Use adjacency list representation (directed)\n\n";
     std::cout << "Operations:\n";
     std::cout << "  stats                                                   - Generate graph statistics only\n";
     std::cout << "  bfs <startVertex>                                       - Run BFS from specified start vertex\n";
@@ -1578,16 +1882,17 @@ void printUsage(const char* programName) {
     std::cout << "  multipleDijkstraHeap <numTests>                         - Run Dijkstra (heap-based) multiple times for performance testing. <numTests> is optional (default 100)\n";
     std::cout << "  measureResearchesDistancesVector <researchesFilePath>   - Measure distances between specific researchers mapped from <researchesFilePath> using Dijkstra (vector-based)\n";
     std::cout << "  measureResearchesDistancesHeap  <researchesFilePath>    - Measure distances between specific researchers mapped from <researchesFilePath> using Dijkstra (heap-based)\n";
-    std::cout << "  all <startVertex>                                       - Run all algorithms (full analysis)\n\n";
-    std::cout << "Options:\n";
+    std::cout << "  measureBellmanFordDistances                             - Measure distances to vertex 100 from specific vertices using Bellman-Ford\n";
+    std::cout << "  multipleBellmanFord <numTests>                          - Run Bellman-Ford multiple times for performance testing. <numTests> is optional (default 100)\n";
+    std::cout << "  all <startVertex>                                       - Run all algorithms (full analysis)\n\n";    std::cout << "Options:\n";
     std::cout << "  --memory                                                - Print memory usage information\n";
     std::cout << "  --timing                                                - Print graph loading time\n\n";
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " graph.txt adjacencyList stats\n";
-    std::cout << "  " << programName << " graph.txt adjacencyMatrix bfs 1\n";
+    std::cout << "  " << programName << " graph.txt directedAdjacencyList bfs 1\n";
     std::cout << "  " << programName << " graph.txt adjacencyList dfs 3 --memory\n";
     std::cout << "  " << programName << " graph.txt adjacencyMatrix diameter --memory --timing\n";
-    std::cout << "  " << programName << " graph.txt adjacencyList components\n";
+    std::cout << "  " << programName << " graph.txt directedAdjacencyList components\n";
     std::cout << "  " << programName << " graph.txt adjacencyMatrix all 1 --memory\n";
 }
 
@@ -1613,8 +1918,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (mode != "adjacencyMatrix" && mode != "adjacencyList") {
-        std::cerr << "Error: Invalid mode. Use 'adjacencyMatrix' or 'adjacencyList'.\n";
+    if (mode != "adjacencyMatrix" && mode != "adjacencyList" && mode != "directedAdjacencyList") {
+        std::cerr << "Error: Invalid mode. Use 'adjacencyMatrix', 'adjacencyList', or 'directedAdjacencyList'.\n";
         return 1;
     }
 
@@ -1623,10 +1928,16 @@ int main(int argc, char* argv[]) {
         auto start = std::chrono::high_resolution_clock::now();
 
         if (mode == "adjacencyMatrix") {
-            graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename);
+            graph = GraphFileReader::readFromFile<AdjacencyMatrixGraph>(filename, false);
+        } else if (mode == "adjacencyList") {
+            graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename, false);
+        } else if (mode == "directedAdjacencyList") {
+            graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename, true);
         } else {
-            graph = GraphFileReader::readFromFile<AdjacencyListGraph>(filename);
+            std::cerr << "Error: Unsupported mode.\n";
+            return 1;
         }
+
         auto end = std::chrono::high_resolution_clock::now();
 
         if (printMemory) {
@@ -1736,8 +2047,12 @@ int main(int argc, char* argv[]) {
             std::string researchesFilePath = argv[4];
             researcherMapper.loadFromFile(researchesFilePath);
             std::visit([&](auto& g) { measureResearchesDistancesHeap(g, researcherMapper); }, graph);
-        }
-        else if (operation == "all") {
+        } else if (operation == "measureBellmanFordDistances") {
+            std::visit([&](auto& g) { measureBellmanFordDistances(g); }, graph);
+        } else if (operation == "multipleBellmanFord") {
+            int numTests = (argc > 4) ? std::stoi(argv[4]) : 10;
+            std::visit([&](auto& g) { runMultipleBellmanFord(g, numTests); }, graph);
+        } else if (operation == "all") {
             if (argc < 5) {
                 std::cerr << "Error: Full analysis requires a start vertex.\n";
                 return 1;
