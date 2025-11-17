@@ -1748,16 +1748,24 @@ void measureBellmanFordDistances(const GraphType& graph) {
     std::cout << "Destination vertex: " << destination << std::endl;
     std::cout << std::endl;
 
+    double totalTime = 0.0;
+    std::map<int, double> executionTimes;
+
     for (int source : sources) {
         try {
             auto start = std::chrono::high_resolution_clock::now();
             bellmanFord.execute(source);
             auto end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> elapsed = end - start;
-            std::cout << "Execution time from source " << source << ": " << elapsed.count() << " seconds" << std::endl;
+
+            executionTimes[source] = elapsed.count();
+            totalTime += elapsed.count();
+
+            std::cout << "Source " << source << " -> Destination " << destination << std::endl;
+            std::cout << "Execution time: " << elapsed.count() << " seconds" << std::endl;
 
             if (bellmanFord.hasNegativeCycleDetected()) {
-                std::cout << "Source " << source << ": ERROR - Graph contains a negative cycle!" << std::endl;
+                std::cout << "ERROR - Graph contains a negative cycle!" << std::endl;
                 std::cout << std::endl;
                 continue;
             }
@@ -1765,10 +1773,9 @@ void measureBellmanFordDistances(const GraphType& graph) {
             double distance = bellmanFord.getDistance(destination);
 
             if (distance == std::numeric_limits<double>::infinity()) {
-                std::cout << "Source " << source << ": No path exists to vertex " << destination << std::endl;
+                std::cout << "No path exists" << std::endl;
             } else {
-                std::cout << "Source " << source << ": Distance to " << destination
-                         << " is " << std::fixed << std::setprecision(2) << distance << std::endl;
+                std::cout << "Distance: " << std::fixed << std::setprecision(2) << distance << std::endl;
 
                 std::vector<int> path = bellmanFord.getShortestPath(destination);
                 std::cout << "Path: ";
@@ -1784,6 +1791,17 @@ void measureBellmanFordDistances(const GraphType& graph) {
             std::cout << std::endl;
         }
     }
+
+    std::cout << "==========================================" << std::endl;
+    std::cout << "TIMING SUMMARY" << std::endl;
+    std::cout << "==========================================" << std::endl;
+    for (const auto& [source, time] : executionTimes) {
+        std::cout << "Source " << source << " -> " << destination
+                  << ": " << time << " seconds" << std::endl;
+    }
+    std::cout << "------------------------------------------" << std::endl;
+    std::cout << "TOTAL EXECUTION TIME: " << totalTime << " seconds" << std::endl;
+    std::cout << "==========================================" << std::endl;
 }
 
 template <typename GraphType>
