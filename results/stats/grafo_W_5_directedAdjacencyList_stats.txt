@@ -1,0 +1,11 @@
+GRAPH STATISTICS
+================
+Graph type: Directed
+Number of vertices: 10000000
+Number of edges: 39999995
+Minimum degree: 1
+Maximum degree: 21
+Average degree: 4.00
+Median degree: 4.00
+Minimum weight: 0.00
+Maximum weight: 10.00
